@@ -1,6 +1,11 @@
-from django.urls import path
-from .views import ListingListCreateView
+# iranapp/listings/urls.py
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import ListingViewSet
+
+router = DefaultRouter()
+router.register(r"listings", ListingViewSet, basename="listings")
 
 urlpatterns = [
-    path('listings/', ListingListCreateView.as_view(), name='listing-list-create'),
+    path("", include(router.urls)),
 ]
