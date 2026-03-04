@@ -2,20 +2,36 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from rest_framework.viewsets import ModelViewSet
+from rest_framework import viewsets
 
 from .models import Listing
 from .serializers import ListingSerializer, ListingImageSerializer
 
 
+
+
 class ListingViewSet(viewsets.ModelViewSet):
-    queryset = Listing.objects.all().order_by("-created_at")
+    permission_classes = [IsAuthenticatedOrReadOnly]
     serializer_class = ListingSerializer
 
-    # ✅ مهم: باعث میشه request وارد serializer بشه و URL ها درست ساخته بشن
+    def get_queryset(self):
+        if self.action in ["list", "retrieve"]:
+            return Listing.objects.all().order_by("-created_at")
+        return Listing.objects.filter(user=self.request.user).order_by("-created_at")
+
     def get_serializer_context(self):
         context = super().get_serializer_context()
         context["request"] = self.request
         return context
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+   
 
     @action(
         detail=True,
@@ -52,3 +68,21 @@ class ListingViewSet(viewsets.ModelViewSet):
             return Response(out, status=status.HTTP_201_CREATED)
 
         return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+class MyListingsViewSet(ModelViewSet):
+    serializer_class = ListingSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
+
+    def get_queryset(self):
+        return Listing.objects.filter(user=self.request.user).order_by("-created_at")
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+

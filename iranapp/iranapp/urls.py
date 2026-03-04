@@ -14,6 +14,8 @@ urlpatterns = [
 
     path('api/accounts/', include('accounts.urls')),
 
+    
+
 ]
 
 if settings.DEBUG:

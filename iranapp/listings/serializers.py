@@ -3,6 +3,7 @@ from django.utils import timezone
 from .models import Listing, ListingImage
 
 
+
 class ListingImageSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
 
@@ -20,6 +21,8 @@ class ListingImageSerializer(serializers.ModelSerializer):
 class ListingSerializer(serializers.ModelSerializer):
     images = ListingImageSerializer(many=True, read_only=True)
     posted_days_ago = serializers.SerializerMethodField()
+    user_id = serializers.IntegerField(source="user.id", read_only=True)
+
 
     class Meta:
         model = Listing
@@ -31,9 +34,11 @@ class ListingSerializer(serializers.ModelSerializer):
             "price",
             "description",
             "contact_info",
+            "user_id",
             "created_at",
             "images",
             "posted_days_ago",
+            
         ]
 
     def get_posted_days_ago(self, obj):
