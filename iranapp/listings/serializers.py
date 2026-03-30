@@ -34,6 +34,7 @@ class ListingSerializer(serializers.ModelSerializer):
             "price",
             "description",
             "contact_info",
+            "category",
             "user_id",
             "created_at",
             "images",
