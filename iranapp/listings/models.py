@@ -18,6 +18,8 @@ class Listing(models.Model):
     description = models.TextField(null=True, blank=True)
     contact_info = models.CharField(max_length=255)
     category = models.CharField(max_length=50, blank=True, default="")
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
     is_featured = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)

@@ -35,6 +35,8 @@ class ListingSerializer(serializers.ModelSerializer):
             "description",
             "contact_info",
             "category",
+            "latitude",
+            "longitude",
             "user_id",
             "created_at",
             "images",
