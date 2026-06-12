@@ -21,19 +21,35 @@ class RegisterView(generics.CreateAPIView):
 
 # ========== LOGIN API ==========
 class LoginView(APIView):
+    """
+    Authenticate with username or email plus password.
+
+    Accepts either:
+      - {"username": "...", "password": "..."}
+      - {"email": "...", "password": "..."}
+    Email may also be sent in the username field for backward compatibility.
+    """
     permission_classes = [AllowAny]
 
     def post(self, request):
-        username = request.data.get("username")
         password = request.data.get("password")
+        identifier = (
+            request.data.get("username") or request.data.get("email") or ""
+        ).strip()
 
-        if not username or not password:
+        if not identifier or not password:
             return Response(
-                {"detail": "Username and password are required."},
+                {"detail": "Username or email and password are required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        user = authenticate(username=username, password=password)
+        user = authenticate(username=identifier, password=password)
+        if user is None and "@" in identifier:
+            matched = User.objects.filter(email__iexact=identifier).first()
+            if matched is not None:
+                user = authenticate(
+                    username=matched.username, password=password
+                )
 
         if user is None:
             return Response(
