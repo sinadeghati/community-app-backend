@@ -28,6 +28,7 @@ DEBUG = True
 
 ALLOWED_HOSTS = [
     "community-app-backend-production.up.railway.app",
+    "community-app-backend-staging.up.railway.app",
     "localhost",
     "127.0.0.1",
 ]
