@@ -1,6 +1,11 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+
+
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(
         write_only=True,

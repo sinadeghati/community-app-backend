@@ -139,5 +139,24 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
 }
+
+# Email — defaults to console backend for local dev; set SMTP vars on Railway for production.
+EMAIL_BACKEND = os.environ.get(
+    'EMAIL_BACKEND',
+    'django.core.mail.backends.console.EmailBackend',
+)
+EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'true').lower() in ('true', '1', 'yes')
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@iranianapp.com')
+
+# Frontend page that collects uid + token and submits the new password.
+FRONTEND_PASSWORD_RESET_URL = os.environ.get(
+    'FRONTEND_PASSWORD_RESET_URL',
+    'http://localhost:3000/reset-password',
+)
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
