@@ -9,7 +9,11 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .password_reset import SendGridEmailError, send_password_reset_email
-from .serializers import PasswordResetRequestSerializer, RegisterSerializer
+from .serializers import (
+    ChangePasswordSerializer,
+    PasswordResetRequestSerializer,
+    RegisterSerializer,
+)
 
 
 # ========== REGISTER API ==========
@@ -97,6 +101,32 @@ class PasswordResetView(APIView):
                 )
 
         return Response(self.SUCCESS_RESPONSE)
+
+
+# ========== CHANGE PASSWORD API ==========
+class ChangePasswordView(APIView):
+    """Change password for the authenticated user."""
+
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["post"]
+
+    def post(self, request):
+        serializer = ChangePasswordSerializer(
+            data=request.data,
+            context={"request": request},
+        )
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer.save()
+
+        return Response(
+            {
+                "success": True,
+                "message": "Password updated successfully",
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 # ========== PROFILE API ==========
