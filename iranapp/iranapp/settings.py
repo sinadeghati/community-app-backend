@@ -141,58 +141,31 @@ REST_FRAMEWORK = {
     ),
 }
 
-# Email — SendGrid SMTP on Railway when SENDGRID_API_KEY is set; console for local dev.
+# Email — SendGrid Web API for password reset when configured; console for local dev.
 _sendgrid_api_key = os.environ.get("SENDGRID_API_KEY", "").strip()
 _email_provider = os.environ.get("EMAIL_PROVIDER", "").strip().lower()
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@iranianapp.com")
 
-if _sendgrid_api_key:
-    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-    EMAIL_HOST = "smtp.sendgrid.net"
-    EMAIL_PORT = 587
-    EMAIL_USE_TLS = True
-    EMAIL_HOST_USER = "apikey"
-    EMAIL_HOST_PASSWORD = _sendgrid_api_key
-    DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@iranianapp.com")
-    _active_email_backend = "smtp (SendGrid)"
+USE_SENDGRID_WEB_API = _email_provider == "sendgrid" and bool(_sendgrid_api_key)
+SENDGRID_API_KEY = _sendgrid_api_key if USE_SENDGRID_WEB_API else ""
+
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend",
+)
+
+if USE_SENDGRID_WEB_API:
+    _active_email_backend = "sendgrid-web-api"
 elif _email_provider == "sendgrid":
-    EMAIL_BACKEND = os.environ.get(
-        "EMAIL_BACKEND",
-        "django.core.mail.backends.console.EmailBackend",
-    )
-    EMAIL_HOST = os.environ.get("EMAIL_HOST", "")
-    EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
-    EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "true").lower() in (
-        "true",
-        "1",
-        "yes",
-    )
-    EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
-    EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
-    DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@iranianapp.com")
     _active_email_backend = "console (SENDGRID_API_KEY missing)"
     print(
         "[email] EMAIL_PROVIDER=sendgrid but SENDGRID_API_KEY is not set; "
         "using console backend"
     )
+elif "smtp" in EMAIL_BACKEND.lower():
+    _active_email_backend = "smtp"
 else:
-    EMAIL_BACKEND = os.environ.get(
-        "EMAIL_BACKEND",
-        "django.core.mail.backends.console.EmailBackend",
-    )
-    EMAIL_HOST = os.environ.get("EMAIL_HOST", "")
-    EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
-    EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "true").lower() in (
-        "true",
-        "1",
-        "yes",
-    )
-    EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
-    EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
-    DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@iranianapp.com")
-    if "smtp" in EMAIL_BACKEND.lower():
-        _active_email_backend = "smtp"
-    else:
-        _active_email_backend = "console"
+    _active_email_backend = "console"
 
 print(f"[email] Active email backend: {_active_email_backend}")
 

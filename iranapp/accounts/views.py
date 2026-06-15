@@ -8,7 +8,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .password_reset import send_password_reset_email
+from .password_reset import SendGridEmailError, send_password_reset_email
 from .serializers import PasswordResetRequestSerializer, RegisterSerializer
 
 
@@ -88,7 +88,13 @@ class PasswordResetView(APIView):
         email = serializer.validated_data["email"]
         user = User.objects.filter(email__iexact=email).first()
         if user is not None:
-            send_password_reset_email(user)
+            try:
+                send_password_reset_email(user)
+            except SendGridEmailError as exc:
+                return Response(
+                    {"success": False, "message": str(exc)},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
 
         return Response(self.SUCCESS_RESPONSE)
 
