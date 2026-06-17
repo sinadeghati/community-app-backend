@@ -29,12 +29,14 @@ DEBUG = True
 ALLOWED_HOSTS = [
     "community-app-backend-production.up.railway.app",
     "community-app-backend-staging.up.railway.app",
+    "api.korook.com",
     "localhost",
     "127.0.0.1",
 ]
 
 CSRF_TRUSTED_ORIGINS = [
     "https://community-app-backend-production.up.railway.app",
+    "https://api.korook.com",
 ]
 
 
