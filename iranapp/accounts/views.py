@@ -11,6 +11,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .password_reset import SendGridEmailError, send_password_reset_email
 from .serializers import (
     ChangePasswordSerializer,
+    PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
     RegisterSerializer,
 )
@@ -101,6 +102,29 @@ class PasswordResetView(APIView):
                 )
 
         return Response(self.SUCCESS_RESPONSE)
+
+
+# ========== PASSWORD RESET CONFIRM API ==========
+class PasswordResetConfirmView(APIView):
+    """Validate uid/token from the reset email and set a new password."""
+
+    permission_classes = [AllowAny]
+    http_method_names = ["post"]
+
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer.save()
+
+        return Response(
+            {
+                "success": True,
+                "message": "Password reset successfully.",
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 # ========== CHANGE PASSWORD API ==========
