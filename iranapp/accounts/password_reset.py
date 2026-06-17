@@ -15,6 +15,7 @@ import json
 import logging
 import urllib.error
 import urllib.request
+from email.utils import parseaddr
 
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
@@ -31,6 +32,19 @@ class SendGridEmailError(Exception):
     """Raised when SendGrid Web API fails to send email."""
 
 
+def get_password_reset_from_address():
+    """
+    Parse settings.DEFAULT_FROM_EMAIL into SendGrid-compatible name + email.
+
+    Supports "Korook <noreply@korook.com>" and plain "noreply@korook.com".
+    """
+    raw_from = settings.DEFAULT_FROM_EMAIL.strip().strip('"').strip("'")
+    name, email = parseaddr(raw_from)
+    if not email:
+        email = raw_from
+    return {"name": name.strip(), "email": email.strip()}
+
+
 def build_password_reset_link(user):
     """
     Build a frontend reset URL: {FRONTEND_PASSWORD_RESET_URL}?uid=<b64-pk>&token=<token>
@@ -44,10 +58,14 @@ def build_password_reset_link(user):
     return f"{base_url}?uid={uid}&token={token}"
 
 
-def _send_via_sendgrid_web_api(*, to_email, subject, body):
+def _send_via_sendgrid_web_api(*, to_email, subject, body, from_address):
+    from_field = {"email": from_address["email"]}
+    if from_address["name"]:
+        from_field["name"] = from_address["name"]
+
     payload = {
         "personalizations": [{"to": [{"email": to_email}]}],
-        "from": {"email": settings.DEFAULT_FROM_EMAIL},
+        "from": from_field,
         "subject": subject,
         "content": [{"type": "text/plain", "value": body}],
     }
@@ -95,14 +113,24 @@ def _send_via_sendgrid_web_api(*, to_email, subject, body):
         )
 
     logger.info(
-        "SendGrid password reset email sent successfully to recipient=%s status=%s",
+        "SendGrid password reset email sent successfully to recipient=%s status=%s from_email=%s from_name=%r",
         to_email,
         status,
+        from_address["email"],
+        from_address["name"] or None,
     )
 
 
 def send_password_reset_email(user):
     """Send a plain-text email with the password reset link."""
+    from_address = get_password_reset_from_address()
+    logger.info(
+        "Sending password reset email to recipient=%s from_email=%s from_name=%r",
+        user.email,
+        from_address["email"],
+        from_address["name"] or None,
+    )
+
     reset_link = build_password_reset_link(user)
     subject = "Password reset instructions"
     message = (
@@ -117,6 +145,7 @@ def send_password_reset_email(user):
             to_email=user.email,
             subject=subject,
             body=message,
+            from_address=from_address,
         )
         return
 
