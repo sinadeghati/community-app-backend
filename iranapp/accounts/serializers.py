@@ -3,8 +3,12 @@ from django.contrib.auth import password_validation
 from django.contrib.auth.models import User
 from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils import timezone
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
+
+from .models import get_or_create_email_profile
+from .tokens import email_verification_token_generator
 
 
 class PasswordResetRequestSerializer(serializers.Serializer):
@@ -66,6 +70,41 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         user.set_password(self.validated_data["new_password"])
         user.save(update_fields=["password"])
         return user
+
+
+class EmailVerificationRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+
+
+class EmailVerifySerializer(serializers.Serializer):
+    uid = serializers.CharField(required=True)
+    token = serializers.CharField(required=True)
+
+    def validate(self, attrs):
+        try:
+            uid = force_str(urlsafe_base64_decode(attrs["uid"]))
+            user = User.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            raise serializers.ValidationError(
+                {"uid": "Invalid user identifier."}
+            ) from None
+
+        if not email_verification_token_generator.check_token(user, attrs["token"]):
+            raise serializers.ValidationError(
+                {"token": "Invalid or expired verification token."}
+            )
+
+        attrs["user"] = user
+        return attrs
+
+    def save(self, **kwargs):
+        user = self.validated_data["user"]
+        profile = get_or_create_email_profile(user)
+        if not profile.email_verified:
+            profile.email_verified = True
+            profile.email_verified_at = timezone.now()
+            profile.save(update_fields=["email_verified", "email_verified_at"])
+        return profile
 
 
 class ChangePasswordSerializer(serializers.Serializer):

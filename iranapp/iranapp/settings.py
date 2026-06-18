@@ -186,5 +186,11 @@ FRONTEND_PASSWORD_RESET_URL = os.environ.get(
     'http://localhost:3000/reset-password',
 )
 
+# Frontend page that verifies email from uid + token query params.
+FRONTEND_EMAIL_VERIFICATION_URL = os.environ.get(
+    'FRONTEND_EMAIL_VERIFICATION_URL',
+    'https://korook.com/verify-email',
+)
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'

@@ -11,38 +11,19 @@ encoding scheme Django's contrib.auth password reset views use. The frontend pas
 uid + token back to a confirm endpoint to validate and set a new password.
 """
 
-import json
 import logging
-import urllib.error
-import urllib.request
-from email.utils import parseaddr
 
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
-from django.core.mail import send_mail
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
+from .email_delivery import SendGridEmailError, send_plain_text_email
+
 logger = logging.getLogger(__name__)
 
-SENDGRID_API_URL = "https://api.sendgrid.com/v3/mail/send"
-
-
-class SendGridEmailError(Exception):
-    """Raised when SendGrid Web API fails to send email."""
-
-
-def get_password_reset_from_address():
-    """
-    Parse settings.DEFAULT_FROM_EMAIL into SendGrid-compatible name + email.
-
-    Supports "Korook <noreply@korook.com>" and plain "noreply@korook.com".
-    """
-    raw_from = settings.DEFAULT_FROM_EMAIL.strip().strip('"').strip("'")
-    name, email = parseaddr(raw_from)
-    if not email:
-        email = raw_from
-    return {"name": name.strip(), "email": email.strip()}
+# Re-export for existing imports in views.py
+__all__ = ["SendGridEmailError", "build_password_reset_link", "send_password_reset_email"]
 
 
 def build_password_reset_link(user):
@@ -58,79 +39,8 @@ def build_password_reset_link(user):
     return f"{base_url}?uid={uid}&token={token}"
 
 
-def _send_via_sendgrid_web_api(*, to_email, subject, body, from_address):
-    from_field = {"email": from_address["email"]}
-    if from_address["name"]:
-        from_field["name"] = from_address["name"]
-
-    payload = {
-        "personalizations": [{"to": [{"email": to_email}]}],
-        "from": from_field,
-        "subject": subject,
-        "content": [{"type": "text/plain", "value": body}],
-    }
-    request = urllib.request.Request(
-        SENDGRID_API_URL,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {settings.SENDGRID_API_KEY}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            status = response.status
-    except urllib.error.HTTPError as exc:
-        error_body = exc.read().decode("utf-8", errors="replace")[:500]
-        logger.error(
-            "SendGrid password reset email failed for recipient=%s status=%s response=%s",
-            to_email,
-            exc.code,
-            error_body,
-        )
-        raise SendGridEmailError(
-            "Unable to send password reset email. Please try again later."
-        ) from exc
-    except urllib.error.URLError as exc:
-        logger.error(
-            "SendGrid password reset email connection error for recipient=%s: %s",
-            to_email,
-            exc.reason,
-        )
-        raise SendGridEmailError(
-            "Unable to send password reset email. Please try again later."
-        ) from exc
-
-    if not (200 <= status < 300):
-        logger.error(
-            "SendGrid password reset email unexpected status for recipient=%s status=%s",
-            to_email,
-            status,
-        )
-        raise SendGridEmailError(
-            "Unable to send password reset email. Please try again later."
-        )
-
-    logger.info(
-        "SendGrid password reset email sent successfully to recipient=%s status=%s from_email=%s from_name=%r",
-        to_email,
-        status,
-        from_address["email"],
-        from_address["name"] or None,
-    )
-
-
 def send_password_reset_email(user):
     """Send a plain-text email with the password reset link."""
-    from_address = get_password_reset_from_address()
-    logger.info(
-        "Sending password reset email to recipient=%s from_email=%s from_name=%r",
-        user.email,
-        from_address["email"],
-        from_address["name"] or None,
-    )
-
     reset_link = build_password_reset_link(user)
     subject = "Password reset instructions"
     message = (
@@ -140,24 +50,15 @@ def send_password_reset_email(user):
         "If you did not request this, you can safely ignore this email.\n"
     )
 
-    if getattr(settings, "USE_SENDGRID_WEB_API", False):
-        _send_via_sendgrid_web_api(
+    try:
+        send_plain_text_email(
             to_email=user.email,
             subject=subject,
             body=message,
-            from_address=from_address,
-        )
-        return
-
-    try:
-        send_mail(
-            subject=subject,
-            message=message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[user.email],
-            fail_silently=False,
+            log_label="password reset",
         )
     except Exception:
         logger.exception(
             "Failed to send password reset email for user pk=%s", user.pk
         )
+        raise

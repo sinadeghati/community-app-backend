@@ -1,6 +1,8 @@
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 
+import logging
+
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -8,13 +10,20 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from .email_verification import send_email_verification
+from .models import get_or_create_email_profile, is_user_email_verified
 from .password_reset import SendGridEmailError, send_password_reset_email
 from .serializers import (
     ChangePasswordSerializer,
+    EmailVerificationRequestSerializer,
+    EmailVerifySerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
     RegisterSerializer,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 # ========== REGISTER API ==========
@@ -22,6 +31,22 @@ class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = RegisterSerializer
     permission_classes = [AllowAny]
+
+    def perform_create(self, serializer):
+        user = serializer.save()
+        get_or_create_email_profile(user)
+        try:
+            send_email_verification(user)
+        except SendGridEmailError:
+            logger.exception(
+                "Failed to send verification email after registration for user pk=%s",
+                user.pk,
+            )
+        except Exception:
+            logger.exception(
+                "Unexpected error sending verification email after registration for user pk=%s",
+                user.pk,
+            )
 
 
 # ========== LOGIN API ==========
@@ -127,6 +152,78 @@ class PasswordResetConfirmView(APIView):
         )
 
 
+# ========== EMAIL VERIFICATION API ==========
+class EmailVerifyView(APIView):
+    """Validate uid/token from the verification email."""
+
+    permission_classes = [AllowAny]
+    http_method_names = ["post"]
+
+    def post(self, request):
+        serializer = EmailVerifySerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        user = serializer.validated_data["user"]
+        profile = get_or_create_email_profile(user)
+        if profile.email_verified:
+            return Response(
+                {
+                    "success": True,
+                    "message": "Email is already verified.",
+                    "email_verified": True,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        serializer.save()
+
+        return Response(
+            {
+                "success": True,
+                "message": "Email verified successfully.",
+                "email_verified": True,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class ResendVerificationView(APIView):
+    """
+    Resend email verification link. Always returns the same success response
+    whether or not the email is registered (prevents account enumeration).
+    """
+
+    permission_classes = [AllowAny]
+    http_method_names = ["post"]
+
+    SUCCESS_RESPONSE = {
+        "success": True,
+        "message": (
+            "If an account exists for this email and is not yet verified, "
+            "verification instructions have been sent."
+        ),
+    }
+
+    def post(self, request):
+        serializer = EmailVerificationRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        email = serializer.validated_data["email"]
+        user = User.objects.filter(email__iexact=email).first()
+        if user is not None and not is_user_email_verified(user):
+            try:
+                send_email_verification(user)
+            except SendGridEmailError as exc:
+                return Response(
+                    {"success": False, "message": str(exc)},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+
+        return Response(self.SUCCESS_RESPONSE)
+
+
 # ========== CHANGE PASSWORD API ==========
 class ChangePasswordView(APIView):
     """Change password for the authenticated user."""
@@ -164,5 +261,6 @@ class ProfileView(APIView):
                 "id": user.id,
                 "username": user.username,
                 "email": user.email,
+                "email_verified": is_user_email_verified(user),
             }
         )
