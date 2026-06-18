@@ -8,7 +8,9 @@ from django.utils.http import urlsafe_base64_encode
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from accounts.models import get_or_create_email_profile, is_user_email_verified
+from listings.models import Listing
+
+from accounts.models import UserEmailProfile, get_or_create_email_profile, is_user_email_verified
 from accounts.tokens import email_verification_token_generator
 
 
@@ -214,3 +216,69 @@ class EmailVerificationTests(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         mock_send.assert_not_called()
+
+
+class DeleteAccountViewTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.password = "SecurePass123!"
+        self.user = User.objects.create_user(
+            username="erin",
+            email="erin@example.com",
+            password=self.password,
+        )
+        get_or_create_email_profile(self.user)
+        self.delete_url = "/api/accounts/delete-account/"
+
+        login_response = self.client.post(
+            "/api/accounts/login/",
+            {"email": "erin@example.com", "password": self.password},
+            format="json",
+        )
+        self.access = login_response.data["access"]
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access}")
+
+        self.listing = Listing.objects.create(
+            user=self.user,
+            title="Erin's Shop",
+            city="Los Angeles",
+            state="CA",
+            contact_info="erin@example.com",
+        )
+
+    def test_delete_account_removes_user_and_profile(self):
+        user_id = self.user.id
+
+        response = self.client.delete(self.delete_url, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["success"])
+        self.assertFalse(User.objects.filter(pk=user_id).exists())
+        self.assertFalse(UserEmailProfile.objects.filter(user_id=user_id).exists())
+
+    def test_delete_account_removes_owned_listings(self):
+        listing_id = self.listing.id
+
+        response = self.client.delete(self.delete_url, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(Listing.objects.filter(pk=listing_id).exists())
+
+    def test_login_fails_after_account_deleted(self):
+        self.client.delete(self.delete_url, format="json")
+        self.client.credentials()
+
+        login_response = self.client.post(
+            "/api/accounts/login/",
+            {"email": "erin@example.com", "password": self.password},
+            format="json",
+        )
+
+        self.assertEqual(login_response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_delete_account_requires_authentication(self):
+        self.client.credentials()
+
+        response = self.client.delete(self.delete_url, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)

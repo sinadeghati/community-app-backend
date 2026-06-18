@@ -10,6 +10,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from .account_deletion import delete_user_account
 from .email_verification import send_email_verification
 from .models import get_or_create_email_profile, is_user_email_verified
 from .password_reset import SendGridEmailError, send_password_reset_email
@@ -263,4 +264,28 @@ class ProfileView(APIView):
                 "email": user.email,
                 "email_verified": is_user_email_verified(user),
             }
+        )
+
+
+# ========== DELETE ACCOUNT API ==========
+class DeleteAccountView(APIView):
+    """Permanently delete the authenticated user and related owned data."""
+
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["delete"]
+
+    def delete(self, request):
+        refresh_token = None
+        if isinstance(request.data, dict):
+            refresh_token = request.data.get("refresh")
+
+        user = request.user
+        delete_user_account(user, refresh_token=refresh_token)
+
+        return Response(
+            {
+                "success": True,
+                "message": "Account deleted successfully.",
+            },
+            status=status.HTTP_200_OK,
         )
