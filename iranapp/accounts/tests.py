@@ -10,8 +10,9 @@ from rest_framework.test import APIClient
 
 from listings.models import Listing
 
-from accounts.models import UserEmailProfile, get_or_create_email_profile, is_user_email_verified
-from accounts.tokens import email_verification_token_generator
+from .models import UserEmailProfile, get_or_create_email_profile, is_user_email_verified
+from .tokens import email_verification_token_generator
+from .verification_codes import issue_verification_code
 
 
 class LoginViewTests(TestCase):
@@ -23,6 +24,7 @@ class LoginViewTests(TestCase):
             email="alice@example.com",
             password=self.password,
         )
+        get_or_create_email_profile(self.user).mark_verified()
         self.login_url = "/api/accounts/login/"
 
     def test_login_with_username(self):
@@ -71,10 +73,31 @@ class LoginViewTests(TestCase):
             "email": "bob@example.com",
             "password": self.password,
         }
-        register_response = self.client.post(
-            register_url, payload, format="json"
-        )
+        with patch("accounts.views.send_email_verification") as mock_send:
+            mock_send.return_value = "123456"
+            register_response = self.client.post(
+                register_url, payload, format="json"
+            )
         self.assertEqual(register_response.status_code, status.HTTP_201_CREATED)
+
+        login_response = self.client.post(
+            self.login_url,
+            {"email": "bob@example.com", "password": self.password},
+            format="json",
+        )
+        self.assertEqual(login_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("verify your email", login_response.data["detail"].lower())
+
+        bob = User.objects.get(username="bob")
+        profile = get_or_create_email_profile(bob)
+        code = issue_verification_code(profile)
+        verify_response = self.client.post(
+            "/api/accounts/email/verify/",
+            {"email": "bob@example.com", "code": code},
+            format="json",
+        )
+        self.assertEqual(verify_response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", verify_response.data)
 
         login_response = self.client.post(
             self.login_url,
@@ -159,6 +182,30 @@ class EmailVerificationTests(TestCase):
         self.uid = urlsafe_base64_encode(force_bytes(self.user.pk))
         self.token = email_verification_token_generator.make_token(self.user)
 
+    def test_verify_email_with_code_returns_tokens(self):
+        code = issue_verification_code(self.user.email_profile)
+        response = self.client.post(
+            self.verify_url,
+            {"email": "carol@example.com", "code": code},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["success"])
+        self.assertIn("access", response.data)
+        self.assertIn("refresh", response.data)
+        self.user.email_profile.refresh_from_db()
+        self.assertTrue(self.user.email_profile.email_verified)
+
+    def test_resend_mobile_alias_path(self):
+        with patch("accounts.views.send_email_verification") as mock_send:
+            response = self.client.post(
+                "/api/accounts/email/resend/",
+                {"email": "carol@example.com"},
+                format="json",
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        mock_send.assert_called_once()
+
     def test_verify_email_success(self):
         response = self.client.post(
             self.verify_url,
@@ -227,7 +274,7 @@ class DeleteAccountViewTests(TestCase):
             email="erin@example.com",
             password=self.password,
         )
-        get_or_create_email_profile(self.user)
+        get_or_create_email_profile(self.user).mark_verified()
         self.delete_url = "/api/accounts/delete-account/"
 
         login_response = self.client.post(
@@ -275,6 +322,12 @@ class DeleteAccountViewTests(TestCase):
         )
 
         self.assertEqual(login_response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_delete_account_mobile_alias_path(self):
+        user_id = self.user.id
+        response = self.client.delete("/api/accounts/delete/", format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(User.objects.filter(pk=user_id).exists())
 
     def test_delete_account_requires_authentication(self):
         self.client.credentials()
