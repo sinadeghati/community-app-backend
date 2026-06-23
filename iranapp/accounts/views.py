@@ -89,6 +89,18 @@ class LoginView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        from korook_platform.models import UserPlatformProfile
+
+        platform_profile = getattr(user, "platform_profile", None)
+        if platform_profile and platform_profile.account_status in (
+            UserPlatformProfile.AccountStatus.SUSPENDED,
+            UserPlatformProfile.AccountStatus.DELETED,
+        ):
+            return Response(
+                {"detail": "This account has been suspended."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         if not is_user_email_verified(user):
             return Response(
                 {

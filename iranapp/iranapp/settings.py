@@ -34,16 +34,25 @@ ALLOWED_HOSTS = [
     "127.0.0.1",
 ]
 
-CSRF_TRUSTED_ORIGINS = [
-    "https://community-app-backend-production.up.railway.app",
-    "https://api.korook.com",
-]
-
 CORS_ALLOWED_ORIGINS = [
     "https://korook.com",
     "https://www.korook.com",
+    "https://admin.korook.com",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+CORS_ALLOW_CREDENTIALS = True
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://community-app-backend-production.up.railway.app",
+    "https://community-app-backend-staging.up.railway.app",
+    "https://api.korook.com",
+    "https://admin.korook.com",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
 ]
 
 
@@ -62,6 +71,8 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'listings',
     'accounts',
+    'korook_platform',
+    'korook_admin',
 ]
 
 MIDDLEWARE = [
@@ -141,6 +152,13 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Korook admin SPA build output (optional local serve)
+ADMIN_PANEL_DIST = BASE_DIR.parent / 'admin-panel' / 'dist'
+
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

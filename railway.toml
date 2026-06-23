@@ -1,2 +1,3 @@
 [deploy]
+buildCommand = "cd admin-panel && npm ci && npm run build"
 startCommand = "cd iranapp && python manage.py migrate && gunicorn iranapp.wsgi:application --bind 0.0.0.0:$PORT"
