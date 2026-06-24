@@ -2,6 +2,12 @@ import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { apiFetch, ensureCsrf, type Claim, type DashboardStats, type Paginated } from "./api";
 import LoginPage from "./pages/LoginPage";
+import UsersPage from "./pages/UsersPage";
+import BusinessesPage from "./pages/BusinessesPage";
+import EventsPage from "./pages/EventsPage";
+import PromotionsPage from "./pages/PromotionsPage";
+import ClaimsPage from "./pages/ClaimsPage";
+import ReportsPage from "./pages/ReportsPage";
 
 const NAV = [
   ["Dashboard", "/"],
@@ -11,8 +17,6 @@ const NAV = [
   ["Promotions", "/promotions"],
   ["Claims", "/claims"],
   ["Reports", "/reports"],
-  ["Media", "/media"],
-  ["Audit Log", "/audit-log"],
 ];
 
 function Shell({ children, onLogout }: { children: React.ReactNode; onLogout: () => void }) {
@@ -105,12 +109,6 @@ function DashboardPage() {
   );
 }
 
-import AdminListPage from "./pages/AdminListPage";
-
-function Placeholder({ title }: { title: string }) {
-  return <div><h1>{title}</h1><p>Phase 1 shell — API wired; detailed UI next.</p></div>;
-}
-
 export default function App() {
   const [user, setUser] = useState<{ username: string } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -142,65 +140,12 @@ export default function App() {
           <Shell onLogout={logout}>
             <Routes>
               <Route path="/" element={<DashboardPage />} />
-              <Route path="/users" element={
-                <AdminListPage title="Users" endpoint="/admin/users/?page_size=25"
-                  columns={[
-                    { key: "id", label: "ID" },
-                    { key: "username", label: "Username" },
-                    { key: "email", label: "Email" },
-                    { key: "role", label: "Role" },
-                    { key: "account_status", label: "Status" },
-                  ]} />
-              } />
-              <Route path="/businesses" element={
-                <AdminListPage title="Businesses" endpoint="/admin/businesses/?page_size=25"
-                  columns={[
-                    { key: "id", label: "ID" },
-                    { key: "title", label: "Title" },
-                    { key: "city", label: "City" },
-                    { key: "status", label: "Status" },
-                    { key: "is_featured", label: "Featured" },
-                  ]} />
-              } />
-              <Route path="/events" element={
-                <AdminListPage title="Events" endpoint="/admin/events/?page_size=25"
-                  columns={[
-                    { key: "id", label: "ID" },
-                    { key: "title", label: "Title" },
-                    { key: "starts_at", label: "Starts" },
-                    { key: "status", label: "Status" },
-                  ]} />
-              } />
-              <Route path="/promotions" element={
-                <AdminListPage title="Promotions / Hero Ads" endpoint="/admin/promotions/?page_size=25"
-                  columns={[
-                    { key: "id", label: "ID" },
-                    { key: "title", label: "Title" },
-                    { key: "placement", label: "Placement" },
-                    { key: "status", label: "Status" },
-                    { key: "advertiser_name", label: "Advertiser" },
-                  ]} />
-              } />
-              <Route path="/claims" element={
-                <AdminListPage title="Claims" endpoint="/admin/claims/?status=all&page_size=25"
-                  columns={[
-                    { key: "id", label: "ID" },
-                    { key: "listing_title", label: "Business" },
-                    { key: "requester_username", label: "Requester" },
-                    { key: "status", label: "Status" },
-                  ]} />
-              } />
-              <Route path="/reports" element={
-                <AdminListPage title="Moderation / Reports" endpoint="/admin/reports/?page_size=25"
-                  columns={[
-                    { key: "id", label: "ID" },
-                    { key: "reported_object_type", label: "Type" },
-                    { key: "reason", label: "Reason" },
-                    { key: "status", label: "Status" },
-                  ]} />
-              } />
-              <Route path="/media" element={<Placeholder title="Media Review" />} />
-              <Route path="/audit-log" element={<Placeholder title="Audit Log" />} />
+              <Route path="/users" element={<UsersPage />} />
+              <Route path="/businesses" element={<BusinessesPage />} />
+              <Route path="/events" element={<EventsPage />} />
+              <Route path="/promotions" element={<PromotionsPage />} />
+              <Route path="/claims" element={<ClaimsPage />} />
+              <Route path="/reports" element={<ReportsPage />} />
             </Routes>
           </Shell>
         ) : <Navigate to="/login" />

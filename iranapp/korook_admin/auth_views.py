@@ -1,17 +1,9 @@
 from django.contrib.auth import authenticate, login, logout
-from django.middleware.csrf import get_token
-from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .mixins import AdminAPIMixin
-
-
-class AdminCsrfView(APIView):
-    @ensure_csrf_cookie
-    def get(self, request):
-        return Response({"csrfToken": get_token(request)})
 
 
 class AdminLoginView(APIView):

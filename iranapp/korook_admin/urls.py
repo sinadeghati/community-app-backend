@@ -1,7 +1,8 @@
 from django.urls import path
 
 from .audit_views import AdminAuditLogListView, AdminSettingsView
-from .auth_views import AdminCsrfView, AdminLoginView, AdminLogoutView, AdminMeView
+from .auth_views import AdminLoginView, AdminLogoutView, AdminMeView
+from .csrf_views import AdminCsrfView
 from .business_views import (
     AdminBusinessActionView,
     AdminBusinessDetailView,

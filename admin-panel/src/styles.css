@@ -96,4 +96,40 @@ th, td { text-align: left; padding: 0.6rem; border-bottom: 1px solid var(--borde
   cursor: pointer;
 }
 .error { color: var(--danger); }
+.success { color: #059669; font-weight: 600; }
+.muted { color: #5b6b82; }
 .center { text-align: center; padding: 2rem; }
+.actions-panel { margin-bottom: 1.5rem; }
+.actions-panel h3 { margin: 0.75rem 0 0.5rem; font-size: 1rem; }
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.row input {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-width: 140px;
+}
+button.secondary {
+  background: white;
+  color: var(--navy);
+  border: 1px solid var(--border);
+}
+table button {
+  background: var(--teal);
+  color: white;
+  border: none;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-right: 0.25rem;
+}
+table button.secondary {
+  background: white;
+  color: var(--navy);
+  border: 1px solid var(--border);
+}

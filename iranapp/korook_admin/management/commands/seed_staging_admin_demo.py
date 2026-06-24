@@ -98,15 +98,21 @@ class Command(BaseCommand):
             requester=owner,
             defaults={"status": BusinessClaim.Status.PENDING},
         )
+        if claim.status != BusinessClaim.Status.PENDING:
+            claim.status = BusinessClaim.Status.PENDING
+            claim.reviewed_by = None
+            claim.reviewed_at = None
+            claim.save()
 
-        ContentReport.objects.get_or_create(
+        ContentReport.objects.update_or_create(
             reported_object_type=ContentReport.ObjectType.LISTING,
             reported_object_id=listing.id,
-            listing=listing,
             defaults={
+                "listing": listing,
                 "reason": "spam",
                 "description": "Staging demo report",
                 "status": ContentReport.Status.NEW,
+                "action_taken": ContentReport.ActionTaken.NONE,
             },
         )
 
