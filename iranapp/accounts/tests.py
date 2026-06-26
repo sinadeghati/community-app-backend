@@ -108,6 +108,113 @@ class LoginViewTests(TestCase):
         self.assertIn("access", login_response.data)
 
 
+class RegisterValidationTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.password = "SecurePass123!"
+        self.register_url = "/api/accounts/register/"
+        User.objects.create_user(
+            username="existing",
+            email="existing@example.com",
+            password=self.password,
+        )
+
+    @patch("accounts.views.send_email_verification")
+    def test_register_rejects_duplicate_username(self, mock_send):
+        response = self.client.post(
+            self.register_url,
+            {
+                "username": "existing",
+                "email": "new@example.com",
+                "password": self.password,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("username", response.data)
+        mock_send.assert_not_called()
+
+    @patch("accounts.views.send_email_verification")
+    def test_register_rejects_duplicate_username_case_insensitive(self, mock_send):
+        response = self.client.post(
+            self.register_url,
+            {
+                "username": "EXISTING",
+                "email": "new@example.com",
+                "password": self.password,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("username", response.data)
+        mock_send.assert_not_called()
+
+    @patch("accounts.views.send_email_verification")
+    def test_register_rejects_duplicate_email(self, mock_send):
+        response = self.client.post(
+            self.register_url,
+            {
+                "username": "newuser",
+                "email": "existing@example.com",
+                "password": self.password,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("email", response.data)
+        mock_send.assert_not_called()
+
+    @patch("accounts.views.send_email_verification")
+    def test_register_normalizes_username_and_email(self, mock_send):
+        response = self.client.post(
+            self.register_url,
+            {
+                "username": "NewUser",
+                "email": "NewUser@Example.COM",
+                "password": self.password,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        user = User.objects.get(username="newuser")
+        self.assertEqual(user.email, "newuser@example.com")
+        mock_send.assert_called_once()
+
+
+class PasswordResetRequestViewTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.password = "SecurePass123!"
+        self.user = User.objects.create_user(
+            username="alice",
+            email="alice@example.com",
+            password=self.password,
+        )
+        self.reset_url = "/api/accounts/password/reset/"
+
+    @patch("accounts.views.send_password_reset_email")
+    def test_password_reset_request_sends_email(self, mock_send):
+        response = self.client.post(
+            self.reset_url,
+            {"email": "alice@example.com"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["success"])
+        mock_send.assert_called_once_with(self.user)
+
+    @patch("accounts.views.send_password_reset_email")
+    def test_password_reset_request_unknown_email_same_response(self, mock_send):
+        response = self.client.post(
+            self.reset_url,
+            {"email": "missing@example.com"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["success"])
+        mock_send.assert_not_called()
+
+
 class PasswordResetConfirmViewTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -137,6 +244,26 @@ class PasswordResetConfirmViewTests(TestCase):
         self.assertTrue(response.data["success"])
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password(self.new_password))
+
+    def test_confirm_then_login_with_new_password(self):
+        get_or_create_email_profile(self.user).mark_verified()
+        self.client.post(
+            self.confirm_url,
+            {
+                "uid": self.uid,
+                "token": self.token,
+                "new_password": self.new_password,
+                "confirm_password": self.new_password,
+            },
+            format="json",
+        )
+        login_response = self.client.post(
+            "/api/accounts/login/",
+            {"email": "alice@example.com", "password": self.new_password},
+            format="json",
+        )
+        self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", login_response.data)
 
     def test_confirm_rejects_invalid_token(self):
         response = self.client.post(

@@ -207,11 +207,29 @@ class RegisterSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'username', 'email', 'password']
 
+    def validate_username(self, value):
+        username = value.strip()
+        if not username:
+            raise serializers.ValidationError("This field may not be blank.")
+        if User.objects.filter(username__iexact=username).exists():
+            raise serializers.ValidationError(
+                "A user with that username already exists."
+            )
+        return username.lower()
+
+    def validate_email(self, value):
+        email = value.strip().lower()
+        if User.objects.filter(email__iexact=email).exists():
+            raise serializers.ValidationError(
+                "A user with this email already exists."
+            )
+        return email
+
     def create(self, validated_data):
         user = User(
             username=validated_data['username'],
-            email=validated_data['email']
+            email=validated_data['email'],
         )
-        user.set_password(validated_data['password'])  # ⭐ پسورد اینجا هش می‌شود
+        user.set_password(validated_data['password'])
         user.save()
         return user
