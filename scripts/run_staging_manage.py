@@ -1,16 +1,30 @@
 """Run a Django management command against staging using the public database URL."""
 import json
 import os
+import shutil
 import subprocess
 import sys
 
 
+def _railway_executable() -> str:
+    return shutil.which("railway") or shutil.which("railway.cmd") or "railway"
+
+
 def main() -> int:
     result = subprocess.run(
-        ["railway", "variables", "--json", "-s", "community-app-backend", "-e", "Staging"],
+        [
+            _railway_executable(),
+            "variables",
+            "--json",
+            "-s",
+            "Postgres",
+            "-e",
+            "Staging",
+        ],
         capture_output=True,
         text=True,
         check=True,
+        shell=os.name == "nt",
     )
     variables = json.loads(result.stdout)
     public_url = variables.get("DATABASE_PUBLIC_URL") or variables.get("PGPUBLICURL")
