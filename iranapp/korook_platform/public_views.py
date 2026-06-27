@@ -12,7 +12,6 @@ class PublicEventSerializer(serializers.ModelSerializer):
     event_date = serializers.DateTimeField(source="starts_at")
     image_url = serializers.SerializerMethodField()
     cover_image = serializers.SerializerMethodField()
-    owner_id = serializers.CharField(source="owner_id")
 
     class Meta:
         model = Event
@@ -21,7 +20,6 @@ class PublicEventSerializer(serializers.ModelSerializer):
             "title",
             "description",
             "category",
-            "business_category",
             "event_date",
             "starts_at",
             "ends_at",
