@@ -15,6 +15,23 @@ class Listing(models.Model):
         EXPIRED = "expired", "Expired"
         PAUSED = "paused", "Paused"
 
+    class SubscriptionStatus(models.TextChoices):
+        NONE = "none", "None"
+        TRIAL = "trial", "Trial"
+        ACTIVE = "active", "Active"
+        PAST_DUE = "past_due", "Past due"
+        CANCELED = "canceled", "Canceled"
+        EXPIRED = "expired", "Expired"
+
+    class PlanName(models.TextChoices):
+        FREE = "free", "Free"
+        PREMIUM = "premium", "Premium"
+        SPONSORED = "sponsored", "Sponsored"
+
+    class BillingCycle(models.TextChoices):
+        MONTHLY = "monthly", "Monthly"
+        YEARLY = "yearly", "Yearly"
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -59,6 +76,34 @@ class Listing(models.Model):
     )
     premium_start_date = models.DateTimeField(null=True, blank=True)
     premium_end_date = models.DateTimeField(null=True, blank=True)
+    subscription_status = models.CharField(
+        max_length=20,
+        choices=SubscriptionStatus.choices,
+        default=SubscriptionStatus.NONE,
+        db_index=True,
+    )
+    plan_name = models.CharField(
+        max_length=20,
+        choices=PlanName.choices,
+        default=PlanName.FREE,
+        db_index=True,
+    )
+    billing_cycle = models.CharField(
+        max_length=20,
+        choices=BillingCycle.choices,
+        blank=True,
+        default="",
+    )
+    subscription_start_date = models.DateTimeField(null=True, blank=True)
+    subscription_end_date = models.DateTimeField(null=True, blank=True)
+    subscription_canceled_at = models.DateTimeField(null=True, blank=True)
+    stripe_customer_id = models.CharField(max_length=128, blank=True, default="")
+    stripe_subscription_id = models.CharField(max_length=128, blank=True, default="")
+    last_payment_status = models.CharField(max_length=64, blank=True, default="")
+    monthly_price_cents = models.PositiveIntegerField(null=True, blank=True)
+    billing_notes = models.TextField(blank=True, default="")
+    logo_url = models.URLField(blank=True, default="")
+    gallery_urls = models.TextField(blank=True, default="")
     display_priority = models.PositiveIntegerField(default=0, db_index=True)
     verified_badge = models.BooleanField(default=False)
     verified_at = models.DateTimeField(null=True, blank=True)
