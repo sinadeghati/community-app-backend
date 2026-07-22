@@ -5,8 +5,14 @@ from django.conf.urls.static import static
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from korook_admin.spa_views import AdminSpaView
+from accounts.views import ResetPasswordPageView
 
 urlpatterns = [
+    path(
+        "reset-password/",
+        ResetPasswordPageView.as_view(),
+        name="reset-password-page",
+    ),
     path('admin/', admin.site.urls),
     re_path(r'^admin-app(?:/(?P<path>.*))?$', AdminSpaView.as_view(), name='korook-admin-spa'),
 

@@ -3,6 +3,8 @@ from django.contrib.auth import authenticate
 
 import logging
 
+from django.views.generic import TemplateView
+
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -175,6 +177,19 @@ class PasswordResetConfirmView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class ResetPasswordPageView(TemplateView):
+    """Minimal public page for staging password reset (uid/token from email link)."""
+
+    template_name = "accounts/reset_password.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["uid"] = self.request.GET.get("uid", "")
+        context["token"] = self.request.GET.get("token", "")
+        context["confirm_api_path"] = "/api/accounts/password/reset/confirm/"
+        return context
 
 
 # ========== EMAIL VERIFICATION API ==========

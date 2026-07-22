@@ -198,10 +198,16 @@ else:
 
 print(f"[email] Active email backend: {_active_email_backend}")
 
-# Frontend page that collects uid + token and submits the new password.
+# Public page that collects uid + token and submits the new password.
+# PASSWORD_RESET_WEB_URL is an alias for FRONTEND_PASSWORD_RESET_URL.
+# Staging example:
+#   FRONTEND_PASSWORD_RESET_URL=https://community-app-backend-staging.up.railway.app/reset-password
 FRONTEND_PASSWORD_RESET_URL = os.environ.get(
     'FRONTEND_PASSWORD_RESET_URL',
-    'http://localhost:3000/reset-password',
+    os.environ.get(
+        'PASSWORD_RESET_WEB_URL',
+        'http://localhost:3000/reset-password',
+    ),
 )
 
 # Frontend page that verifies email from uid + token query params.

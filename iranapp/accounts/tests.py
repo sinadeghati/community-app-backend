@@ -215,6 +215,24 @@ class PasswordResetRequestViewTests(TestCase):
         mock_send.assert_not_called()
 
 
+class ResetPasswordPageViewTests(TestCase):
+    def test_get_renders_form_with_query_params(self):
+        response = self.client.get(
+            "/reset-password/",
+            {"uid": "dGVzdA", "token": "abc123"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Reset your password")
+        self.assertContains(response, "dGVzdA")
+        self.assertContains(response, "abc123")
+        self.assertContains(response, "/api/accounts/password/reset/confirm/")
+
+    def test_get_without_params_shows_invalid_link_message(self):
+        response = self.client.get("/reset-password/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "invalid or incomplete")
+
+
 class PasswordResetConfirmViewTests(TestCase):
     def setUp(self):
         self.client = APIClient()
