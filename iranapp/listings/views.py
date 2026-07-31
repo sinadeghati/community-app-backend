@@ -20,7 +20,10 @@ class ListingViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         if self.action in ["list", "retrieve"]:
-            return Listing.objects.all().order_by("-created_at")
+            return (
+                Listing.objects.filter(status=Listing.Status.PUBLISHED)
+                .order_by("-created_at")
+            )
         return Listing.objects.filter(user=self.request.user).order_by("-created_at")
 
     def get_serializer_context(self):

@@ -77,33 +77,60 @@ class EmailVerificationRequestSerializer(serializers.Serializer):
 
 
 class EmailVerifySerializer(serializers.Serializer):
-    uid = serializers.CharField(required=True)
-    token = serializers.CharField(required=True)
+    uid = serializers.CharField(required=False)
+    token = serializers.CharField(required=False)
+    email = serializers.EmailField(required=False)
+    code = serializers.CharField(required=False, max_length=6, min_length=6)
 
     def validate(self, attrs):
+        email = attrs.get("email")
+        code = attrs.get("code")
+        if email and code:
+            attrs["mode"] = "code"
+            return attrs
+
+        uid = attrs.get("uid")
+        token = attrs.get("token")
+        if not uid or not token:
+            raise serializers.ValidationError(
+                {
+                    "detail": (
+                        "Provide either email and code, or uid and token."
+                    )
+                }
+            )
+
         try:
-            uid = force_str(urlsafe_base64_decode(attrs["uid"]))
-            user = User.objects.get(pk=uid)
+            uid_value = force_str(urlsafe_base64_decode(uid))
+            user = User.objects.get(pk=uid_value)
         except (TypeError, ValueError, OverflowError, User.DoesNotExist):
             raise serializers.ValidationError(
                 {"uid": "Invalid user identifier."}
             ) from None
 
-        if not email_verification_token_generator.check_token(user, attrs["token"]):
+        if not email_verification_token_generator.check_token(user, token):
             raise serializers.ValidationError(
                 {"token": "Invalid or expired verification token."}
             )
 
+        attrs["mode"] = "token"
         attrs["user"] = user
         return attrs
 
     def save(self, **kwargs):
+        if self.validated_data.get("mode") == "code":
+            from .verification_codes import verify_email_code
+
+            user = verify_email_code(
+                email=self.validated_data["email"],
+                code=self.validated_data["code"],
+            )
+            return get_or_create_email_profile(user)
+
         user = self.validated_data["user"]
         profile = get_or_create_email_profile(user)
         if not profile.email_verified:
-            profile.email_verified = True
-            profile.email_verified_at = timezone.now()
-            profile.save(update_fields=["email_verified", "email_verified_at"])
+            profile.mark_verified()
         return profile
 
 
@@ -180,11 +207,29 @@ class RegisterSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'username', 'email', 'password']
 
+    def validate_username(self, value):
+        username = value.strip()
+        if not username:
+            raise serializers.ValidationError("This field may not be blank.")
+        if User.objects.filter(username__iexact=username).exists():
+            raise serializers.ValidationError(
+                "A user with that username already exists."
+            )
+        return username.lower()
+
+    def validate_email(self, value):
+        email = value.strip().lower()
+        if User.objects.filter(email__iexact=email).exists():
+            raise serializers.ValidationError(
+                "A user with this email already exists."
+            )
+        return email
+
     def create(self, validated_data):
         user = User(
             username=validated_data['username'],
-            email=validated_data['email']
+            email=validated_data['email'],
         )
-        user.set_password(validated_data['password'])  # ⭐ پسورد اینجا هش می‌شود
+        user.set_password(validated_data['password'])
         user.save()
         return user

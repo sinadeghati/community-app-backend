@@ -1,0 +1,8 @@
+{
+  "name": "community-app-backend",
+  "private": true,
+  "description": "Triggers Node install on Railway so admin-panel can be built.",
+  "scripts": {
+    "build": "cd admin-panel && npm ci && npm run build"
+  }
+}

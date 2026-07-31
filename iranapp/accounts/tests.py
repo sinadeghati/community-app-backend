@@ -10,8 +10,9 @@ from rest_framework.test import APIClient
 
 from listings.models import Listing
 
-from accounts.models import UserEmailProfile, get_or_create_email_profile, is_user_email_verified
-from accounts.tokens import email_verification_token_generator
+from .models import UserEmailProfile, get_or_create_email_profile, is_user_email_verified
+from .tokens import email_verification_token_generator
+from .verification_codes import issue_verification_code
 
 
 class LoginViewTests(TestCase):
@@ -23,6 +24,7 @@ class LoginViewTests(TestCase):
             email="alice@example.com",
             password=self.password,
         )
+        get_or_create_email_profile(self.user).mark_verified()
         self.login_url = "/api/accounts/login/"
 
     def test_login_with_username(self):
@@ -71,10 +73,31 @@ class LoginViewTests(TestCase):
             "email": "bob@example.com",
             "password": self.password,
         }
-        register_response = self.client.post(
-            register_url, payload, format="json"
-        )
+        with patch("accounts.views.send_email_verification") as mock_send:
+            mock_send.return_value = "123456"
+            register_response = self.client.post(
+                register_url, payload, format="json"
+            )
         self.assertEqual(register_response.status_code, status.HTTP_201_CREATED)
+
+        login_response = self.client.post(
+            self.login_url,
+            {"email": "bob@example.com", "password": self.password},
+            format="json",
+        )
+        self.assertEqual(login_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("verify your email", login_response.data["detail"].lower())
+
+        bob = User.objects.get(username="bob")
+        profile = get_or_create_email_profile(bob)
+        code = issue_verification_code(profile)
+        verify_response = self.client.post(
+            "/api/accounts/email/verify/",
+            {"email": "bob@example.com", "code": code},
+            format="json",
+        )
+        self.assertEqual(verify_response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", verify_response.data)
 
         login_response = self.client.post(
             self.login_url,
@@ -83,6 +106,131 @@ class LoginViewTests(TestCase):
         )
         self.assertEqual(login_response.status_code, status.HTTP_200_OK)
         self.assertIn("access", login_response.data)
+
+
+class RegisterValidationTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.password = "SecurePass123!"
+        self.register_url = "/api/accounts/register/"
+        User.objects.create_user(
+            username="existing",
+            email="existing@example.com",
+            password=self.password,
+        )
+
+    @patch("accounts.views.send_email_verification")
+    def test_register_rejects_duplicate_username(self, mock_send):
+        response = self.client.post(
+            self.register_url,
+            {
+                "username": "existing",
+                "email": "new@example.com",
+                "password": self.password,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("username", response.data)
+        mock_send.assert_not_called()
+
+    @patch("accounts.views.send_email_verification")
+    def test_register_rejects_duplicate_username_case_insensitive(self, mock_send):
+        response = self.client.post(
+            self.register_url,
+            {
+                "username": "EXISTING",
+                "email": "new@example.com",
+                "password": self.password,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("username", response.data)
+        mock_send.assert_not_called()
+
+    @patch("accounts.views.send_email_verification")
+    def test_register_rejects_duplicate_email(self, mock_send):
+        response = self.client.post(
+            self.register_url,
+            {
+                "username": "newuser",
+                "email": "existing@example.com",
+                "password": self.password,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("email", response.data)
+        mock_send.assert_not_called()
+
+    @patch("accounts.views.send_email_verification")
+    def test_register_normalizes_username_and_email(self, mock_send):
+        response = self.client.post(
+            self.register_url,
+            {
+                "username": "NewUser",
+                "email": "NewUser@Example.COM",
+                "password": self.password,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        user = User.objects.get(username="newuser")
+        self.assertEqual(user.email, "newuser@example.com")
+        mock_send.assert_called_once()
+
+
+class PasswordResetRequestViewTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.password = "SecurePass123!"
+        self.user = User.objects.create_user(
+            username="alice",
+            email="alice@example.com",
+            password=self.password,
+        )
+        self.reset_url = "/api/accounts/password/reset/"
+
+    @patch("accounts.views.send_password_reset_email")
+    def test_password_reset_request_sends_email(self, mock_send):
+        response = self.client.post(
+            self.reset_url,
+            {"email": "alice@example.com"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["success"])
+        mock_send.assert_called_once_with(self.user)
+
+    @patch("accounts.views.send_password_reset_email")
+    def test_password_reset_request_unknown_email_same_response(self, mock_send):
+        response = self.client.post(
+            self.reset_url,
+            {"email": "missing@example.com"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["success"])
+        mock_send.assert_not_called()
+
+
+class ResetPasswordPageViewTests(TestCase):
+    def test_get_renders_form_with_query_params(self):
+        response = self.client.get(
+            "/reset-password/",
+            {"uid": "dGVzdA", "token": "abc123"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Reset your password")
+        self.assertContains(response, "dGVzdA")
+        self.assertContains(response, "abc123")
+        self.assertContains(response, "/api/accounts/password/reset/confirm/")
+
+    def test_get_without_params_shows_invalid_link_message(self):
+        response = self.client.get("/reset-password/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "invalid or incomplete")
 
 
 class PasswordResetConfirmViewTests(TestCase):
@@ -114,6 +262,26 @@ class PasswordResetConfirmViewTests(TestCase):
         self.assertTrue(response.data["success"])
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password(self.new_password))
+
+    def test_confirm_then_login_with_new_password(self):
+        get_or_create_email_profile(self.user).mark_verified()
+        self.client.post(
+            self.confirm_url,
+            {
+                "uid": self.uid,
+                "token": self.token,
+                "new_password": self.new_password,
+                "confirm_password": self.new_password,
+            },
+            format="json",
+        )
+        login_response = self.client.post(
+            "/api/accounts/login/",
+            {"email": "alice@example.com", "password": self.new_password},
+            format="json",
+        )
+        self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", login_response.data)
 
     def test_confirm_rejects_invalid_token(self):
         response = self.client.post(
@@ -158,6 +326,30 @@ class EmailVerificationTests(TestCase):
         self.resend_url = "/api/accounts/email/resend-verification/"
         self.uid = urlsafe_base64_encode(force_bytes(self.user.pk))
         self.token = email_verification_token_generator.make_token(self.user)
+
+    def test_verify_email_with_code_returns_tokens(self):
+        code = issue_verification_code(self.user.email_profile)
+        response = self.client.post(
+            self.verify_url,
+            {"email": "carol@example.com", "code": code},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["success"])
+        self.assertIn("access", response.data)
+        self.assertIn("refresh", response.data)
+        self.user.email_profile.refresh_from_db()
+        self.assertTrue(self.user.email_profile.email_verified)
+
+    def test_resend_mobile_alias_path(self):
+        with patch("accounts.views.send_email_verification") as mock_send:
+            response = self.client.post(
+                "/api/accounts/email/resend/",
+                {"email": "carol@example.com"},
+                format="json",
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        mock_send.assert_called_once()
 
     def test_verify_email_success(self):
         response = self.client.post(
@@ -227,7 +419,7 @@ class DeleteAccountViewTests(TestCase):
             email="erin@example.com",
             password=self.password,
         )
-        get_or_create_email_profile(self.user)
+        get_or_create_email_profile(self.user).mark_verified()
         self.delete_url = "/api/accounts/delete-account/"
 
         login_response = self.client.post(
@@ -276,9 +468,147 @@ class DeleteAccountViewTests(TestCase):
 
         self.assertEqual(login_response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_delete_account_mobile_alias_path(self):
+        user_id = self.user.id
+        response = self.client.delete("/api/accounts/delete/", format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(User.objects.filter(pk=user_id).exists())
+
     def test_delete_account_requires_authentication(self):
         self.client.credentials()
 
         response = self.client.delete(self.delete_url, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class LegacyEmailVerificationMigrationTests(TestCase):
+    """Release migration 0003 must not lock out pre-existing users."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.password = "SecurePass123!"
+        self.login_url = "/api/accounts/login/"
+
+    def _run_backfill(self):
+        import importlib
+
+        from django.apps import apps
+
+        module = importlib.import_module(
+            "accounts.migrations.0003_backfill_legacy_email_verification"
+        )
+        module.backfill_legacy_verified_users(apps, None)
+
+    def test_backfill_verifies_user_without_profile(self):
+        legacy = User.objects.create_user(
+            username="legacy1",
+            email="legacy1@example.com",
+            password=self.password,
+        )
+        self.assertFalse(is_user_email_verified(legacy))
+
+        self._run_backfill()
+
+        legacy.refresh_from_db()
+        self.assertTrue(legacy.email_profile.email_verified)
+        self.assertIsNotNone(legacy.email_profile.email_verified_at)
+
+    def test_backfill_verifies_user_with_unverified_profile(self):
+        legacy = User.objects.create_user(
+            username="legacy2",
+            email="legacy2@example.com",
+            password=self.password,
+        )
+        get_or_create_email_profile(legacy)
+        self.assertFalse(legacy.email_profile.email_verified)
+
+        self._run_backfill()
+
+        legacy.email_profile.refresh_from_db()
+        self.assertTrue(legacy.email_profile.email_verified)
+
+    def test_users_created_after_backfill_remain_unverified(self):
+        self._run_backfill()
+
+        new_user = User.objects.create_user(
+            username="newbie",
+            email="newbie@example.com",
+            password=self.password,
+        )
+        get_or_create_email_profile(new_user)
+
+        self.assertFalse(new_user.email_profile.email_verified)
+
+    def test_legacy_user_can_login_after_backfill(self):
+        User.objects.create_user(
+            username="legacy3",
+            email="legacy3@example.com",
+            password=self.password,
+        )
+        self._run_backfill()
+
+        response = self.client.post(
+            self.login_url,
+            {"email": "legacy3@example.com", "password": self.password},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data)
+
+    def test_new_unverified_user_blocked_after_backfill(self):
+        self._run_backfill()
+
+        with patch("accounts.views.send_email_verification"):
+            self.client.post(
+                "/api/accounts/register/",
+                {
+                    "username": "blocked",
+                    "email": "blocked@example.com",
+                    "password": self.password,
+                },
+                format="json",
+            )
+
+        response = self.client.post(
+            self.login_url,
+            {"email": "blocked@example.com", "password": self.password},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("verify your email", response.data["detail"].lower())
+
+
+class ListingImageHttpsUrlTests(TestCase):
+    def test_image_url_uses_https_behind_proxy(self):
+        from django.test import RequestFactory
+
+        from listings.models import Listing, ListingImage
+        from listings.serializers import ListingImageSerializer
+
+        user = User.objects.create_user(
+            username="owner",
+            email="owner@example.com",
+            password="pass",
+        )
+        listing = Listing.objects.create(
+            user=user,
+            title="Shop",
+            city="LA",
+            state="CA",
+            contact_info="owner@example.com",
+        )
+        image = ListingImage.objects.create(
+            listing=listing,
+            image="listings/test.jpg",
+            role=ListingImage.Role.GALLERY,
+        )
+
+        request = RequestFactory().get(
+            "/api/listings/",
+            HTTP_HOST="api.korook.com",
+            HTTP_X_FORWARDED_PROTO="https",
+        )
+        data = ListingImageSerializer(image, context={"request": request}).data
+
+        self.assertTrue(data["image_url"].startswith("https://api.korook.com/"))

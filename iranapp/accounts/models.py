@@ -11,6 +11,11 @@ class UserEmailProfile(models.Model):
     )
     email_verified = models.BooleanField(default=False)
     email_verified_at = models.DateTimeField(null=True, blank=True)
+    verification_code_hash = models.CharField(max_length=128, blank=True, null=True)
+    verification_code_expires_at = models.DateTimeField(null=True, blank=True)
+    verification_last_sent_at = models.DateTimeField(null=True, blank=True)
+    verification_sends_in_window = models.PositiveSmallIntegerField(default=0)
+    verification_window_started_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = "user email profile"

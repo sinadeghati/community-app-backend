@@ -3,6 +3,8 @@ from django.contrib.auth import authenticate
 
 import logging
 
+from django.views.generic import TemplateView
+
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -14,6 +16,7 @@ from .account_deletion import delete_user_account
 from .email_verification import send_email_verification
 from .models import get_or_create_email_profile, is_user_email_verified
 from .password_reset import SendGridEmailError, send_password_reset_email
+from .verification_codes import VerificationRateLimitError
 from .serializers import (
     ChangePasswordSerializer,
     EmailVerificationRequestSerializer,
@@ -88,6 +91,29 @@ class LoginView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        from korook_platform.models import UserPlatformProfile
+
+        platform_profile = getattr(user, "platform_profile", None)
+        if platform_profile and platform_profile.account_status in (
+            UserPlatformProfile.AccountStatus.SUSPENDED,
+            UserPlatformProfile.AccountStatus.DELETED,
+        ):
+            return Response(
+                {"detail": "This account has been suspended."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if not is_user_email_verified(user):
+            return Response(
+                {
+                    "detail": (
+                        "Please verify your email before signing in. "
+                        "Check your inbox for a verification code."
+                    )
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         refresh = RefreshToken.for_user(user)
 
         return Response(
@@ -153,6 +179,19 @@ class PasswordResetConfirmView(APIView):
         )
 
 
+class ResetPasswordPageView(TemplateView):
+    """Minimal public page for staging password reset (uid/token from email link)."""
+
+    template_name = "accounts/reset_password.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["uid"] = self.request.GET.get("uid", "")
+        context["token"] = self.request.GET.get("token", "")
+        context["confirm_api_path"] = "/api/accounts/password/reset/confirm/"
+        return context
+
+
 # ========== EMAIL VERIFICATION API ==========
 class EmailVerifyView(APIView):
     """Validate uid/token from the verification email."""
@@ -165,27 +204,35 @@ class EmailVerifyView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        user = serializer.validated_data["user"]
-        profile = get_or_create_email_profile(user)
+        try:
+            profile = serializer.save()
+        except ValueError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = profile.user
         if profile.email_verified:
+            refresh = RefreshToken.for_user(user)
             return Response(
                 {
                     "success": True,
-                    "message": "Email is already verified.",
+                    "message": "Email verified successfully.",
                     "email_verified": True,
+                    "access": str(refresh.access_token),
+                    "refresh": str(refresh),
                 },
                 status=status.HTTP_200_OK,
             )
 
-        serializer.save()
-
         return Response(
             {
-                "success": True,
-                "message": "Email verified successfully.",
-                "email_verified": True,
+                "success": False,
+                "message": "Email could not be verified.",
+                "email_verified": False,
             },
-            status=status.HTTP_200_OK,
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
 
@@ -216,6 +263,15 @@ class ResendVerificationView(APIView):
         if user is not None and not is_user_email_verified(user):
             try:
                 send_email_verification(user)
+            except VerificationRateLimitError as exc:
+                headers = {}
+                if exc.retry_after_seconds is not None:
+                    headers["Retry-After"] = str(exc.retry_after_seconds)
+                return Response(
+                    {"success": False, "message": str(exc)},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                    headers=headers,
+                )
             except SendGridEmailError as exc:
                 return Response(
                     {"success": False, "message": str(exc)},
