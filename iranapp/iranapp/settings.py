@@ -17,6 +17,13 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def _env_bool(name, *, default=False):
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -24,7 +31,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-wf&#7cpn6(-e@&833ph!0kjg0mgm(ylur9u71b22ta2f89vzc9'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Default False for Railway/production. Set DEBUG=1 for local development.
+DEBUG = _env_bool("DEBUG", default=False)
 
 ALLOWED_HOSTS = [
     "community-app-backend-production.up.railway.app",
@@ -54,6 +62,14 @@ CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
+
+# Railway terminates TLS at the edge. Do not enable SECURE_SSL_REDIRECT — it
+# would redirect API clients and break mobile/web integrations.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    USE_X_FORWARDED_HOST = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
 
 
 # Application definition
@@ -218,3 +234,7 @@ FRONTEND_EMAIL_VERIFICATION_URL = os.environ.get(
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# Serve uploaded files when using local MEDIA_ROOT (default on Railway).
+# Independent of DEBUG so production can run with DEBUG=False.
+SERVE_MEDIA = _env_bool("SERVE_MEDIA", default=True)

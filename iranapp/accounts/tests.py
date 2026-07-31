@@ -480,3 +480,135 @@ class DeleteAccountViewTests(TestCase):
         response = self.client.delete(self.delete_url, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class LegacyEmailVerificationMigrationTests(TestCase):
+    """Release migration 0003 must not lock out pre-existing users."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.password = "SecurePass123!"
+        self.login_url = "/api/accounts/login/"
+
+    def _run_backfill(self):
+        import importlib
+
+        from django.apps import apps
+
+        module = importlib.import_module(
+            "accounts.migrations.0003_backfill_legacy_email_verification"
+        )
+        module.backfill_legacy_verified_users(apps, None)
+
+    def test_backfill_verifies_user_without_profile(self):
+        legacy = User.objects.create_user(
+            username="legacy1",
+            email="legacy1@example.com",
+            password=self.password,
+        )
+        self.assertFalse(is_user_email_verified(legacy))
+
+        self._run_backfill()
+
+        legacy.refresh_from_db()
+        self.assertTrue(legacy.email_profile.email_verified)
+        self.assertIsNotNone(legacy.email_profile.email_verified_at)
+
+    def test_backfill_verifies_user_with_unverified_profile(self):
+        legacy = User.objects.create_user(
+            username="legacy2",
+            email="legacy2@example.com",
+            password=self.password,
+        )
+        get_or_create_email_profile(legacy)
+        self.assertFalse(legacy.email_profile.email_verified)
+
+        self._run_backfill()
+
+        legacy.email_profile.refresh_from_db()
+        self.assertTrue(legacy.email_profile.email_verified)
+
+    def test_users_created_after_backfill_remain_unverified(self):
+        self._run_backfill()
+
+        new_user = User.objects.create_user(
+            username="newbie",
+            email="newbie@example.com",
+            password=self.password,
+        )
+        get_or_create_email_profile(new_user)
+
+        self.assertFalse(new_user.email_profile.email_verified)
+
+    def test_legacy_user_can_login_after_backfill(self):
+        User.objects.create_user(
+            username="legacy3",
+            email="legacy3@example.com",
+            password=self.password,
+        )
+        self._run_backfill()
+
+        response = self.client.post(
+            self.login_url,
+            {"email": "legacy3@example.com", "password": self.password},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data)
+
+    def test_new_unverified_user_blocked_after_backfill(self):
+        self._run_backfill()
+
+        with patch("accounts.views.send_email_verification"):
+            self.client.post(
+                "/api/accounts/register/",
+                {
+                    "username": "blocked",
+                    "email": "blocked@example.com",
+                    "password": self.password,
+                },
+                format="json",
+            )
+
+        response = self.client.post(
+            self.login_url,
+            {"email": "blocked@example.com", "password": self.password},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("verify your email", response.data["detail"].lower())
+
+
+class ListingImageHttpsUrlTests(TestCase):
+    def test_image_url_uses_https_behind_proxy(self):
+        from django.test import RequestFactory
+
+        from listings.models import Listing, ListingImage
+        from listings.serializers import ListingImageSerializer
+
+        user = User.objects.create_user(
+            username="owner",
+            email="owner@example.com",
+            password="pass",
+        )
+        listing = Listing.objects.create(
+            user=user,
+            title="Shop",
+            city="LA",
+            state="CA",
+            contact_info="owner@example.com",
+        )
+        image = ListingImage.objects.create(
+            listing=listing,
+            image="listings/test.jpg",
+            role=ListingImage.Role.GALLERY,
+        )
+
+        request = RequestFactory().get(
+            "/api/listings/",
+            HTTP_HOST="api.korook.com",
+            HTTP_X_FORWARDED_PROTO="https",
+        )
+        data = ListingImageSerializer(image, context={"request": request}).data
+
+        self.assertTrue(data["image_url"].startswith("https://api.korook.com/"))
