@@ -1,5 +1,5 @@
 from django.contrib.auth.models import User
-from django.db.models import Q
+from django.db.models import Case, IntegerField, OuterRef, Q, Subquery, Value, When
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -11,7 +11,31 @@ from listings.models import Listing, ListingImage
 
 from .mixins import AdminAPIMixin
 from .pagination import AdminPageNumberPagination
-from .serializers import ListingAdminSerializer, ListingImageAdminSerializer
+from .serializers import (
+    ListingAdminListSerializer,
+    ListingAdminSerializer,
+    ListingImageAdminSerializer,
+)
+
+
+def _thumbnail_subquery():
+    return ListingImage.objects.filter(
+        listing_id=OuterRef("pk"),
+        media_status=ListingImage.MediaStatus.ACTIVE,
+    ).annotate(
+        role_order=Case(
+            When(role=ListingImage.Role.COVER, then=Value(0)),
+            When(role=ListingImage.Role.LOGO, then=Value(1)),
+            default=Value(2),
+            output_field=IntegerField(),
+        )
+    ).order_by("role_order", "id").values("image")[:1]
+
+
+def _business_list_queryset():
+    return Listing.objects.annotate(
+        thumbnail_image=Subquery(_thumbnail_subquery())
+    ).order_by("-created_at")
 
 
 def _business_queryset():
@@ -25,7 +49,6 @@ def _filter_businesses(qs, request):
             Q(title__icontains=search)
             | Q(business_name__icontains=search)
             | Q(city__icontains=search)
-            | Q(category__icontains=search)
         )
     status_val = request.query_params.get("status")
     if status_val:
@@ -38,11 +61,13 @@ def _filter_businesses(qs, request):
 
 class AdminBusinessListCreateView(AdminAPIMixin, APIView):
     def get(self, request):
-        qs = _filter_businesses(_business_queryset(), request)
+        qs = _filter_businesses(_business_list_queryset(), request)
         paginator = AdminPageNumberPagination()
         page = paginator.paginate_queryset(qs, request)
         return paginator.get_paginated_response(
-            ListingAdminSerializer(page, many=True, context={"request": request}).data
+            ListingAdminListSerializer(
+                page, many=True, context={"request": request}
+            ).data
         )
 
     def post(self, request):

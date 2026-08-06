@@ -128,6 +128,34 @@ class ListingAdminSerializer(serializers.ModelSerializer):
         read_only_fields = ["created_at", "updated_at", "verified_at"]
 
 
+class ListingAdminListSerializer(serializers.ModelSerializer):
+    """Lightweight row for admin business list (no nested image galleries)."""
+
+    thumbnail_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Listing
+        fields = [
+            "id",
+            "title",
+            "business_name",
+            "city",
+            "status",
+            "is_featured",
+            "thumbnail_url",
+        ]
+
+    def get_thumbnail_url(self, obj):
+        thumbnail_name = getattr(obj, "thumbnail_image", None)
+        if not thumbnail_name:
+            return None
+        request = self.context.get("request")
+        if not request:
+            return None
+        from django.core.files.storage import default_storage
+
+        return request.build_absolute_uri(default_storage.url(thumbnail_name))
+
 class EventAdminSerializer(serializers.ModelSerializer):
     owner_id = serializers.IntegerField(source="owner.id", read_only=True)
     listing_id = serializers.IntegerField(source="listing.id", read_only=True, allow_null=True)

@@ -1,9 +1,14 @@
 from django.contrib.auth.models import User
+from django.core.cache import cache
+from django.db import connection
 from django.test import Client, TestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from listings.models import Listing
+from listings.models import Listing, ListingImage
 from korook_platform.models import BusinessClaim, UserPlatformProfile
+
+from .dashboard_views import DASHBOARD_STATS_CACHE_KEY, build_dashboard_stats
 
 
 class AdminAuthTests(TestCase):
@@ -85,3 +90,137 @@ class ClaimQueueTests(TestCase):
         self.assertEqual(approve.status_code, 200)
         self.listing.refresh_from_db()
         self.assertEqual(self.listing.owner_id, self.requester.id)
+
+
+class AdminDashboardStatsTests(TestCase):
+    def setUp(self):
+        cache.delete(DASHBOARD_STATS_CACHE_KEY)
+        self.client = Client(enforce_csrf_checks=False)
+        self.staff = User.objects.create_user(
+            username="staff3",
+            email="staff3@korook.com",
+            password="StaffPass!234",
+            is_staff=True,
+        )
+        self.client.post(
+            "/api/admin/auth/login/",
+            {"username": "staff3", "password": "StaffPass!234"},
+            content_type="application/json",
+        )
+        Listing.objects.create(
+            user=self.staff,
+            title="Published Shop",
+            city="LA",
+            state="CA",
+            contact_info="shop@korook.com",
+            status=Listing.Status.PUBLISHED,
+        )
+        Listing.objects.create(
+            user=self.staff,
+            title="Draft Shop",
+            city="SF",
+            state="CA",
+            contact_info="draft@korook.com",
+            status=Listing.Status.DRAFT,
+        )
+
+    def test_dashboard_stats_totals(self):
+        stats = build_dashboard_stats()
+        self.assertGreaterEqual(stats["users_total"], 1)
+        self.assertEqual(stats["businesses_total"], 2)
+        self.assertEqual(stats["businesses_draft"], 1)
+        self.assertEqual(stats["businesses_pending"], 1)
+
+        response = self.client.get("/api/admin/dashboard/stats/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["businesses_total"], 2)
+
+    def test_dashboard_stats_use_bounded_query_count(self):
+        cache.delete(DASHBOARD_STATS_CACHE_KEY)
+        with CaptureQueriesContext(connection) as ctx:
+            build_dashboard_stats()
+        self.assertLessEqual(len(ctx.captured_queries), 8)
+
+
+class AdminBusinessListPerformanceTests(TestCase):
+    def setUp(self):
+        self.client = Client(enforce_csrf_checks=False)
+        self.staff = User.objects.create_user(
+            username="staff4",
+            email="staff4@korook.com",
+            password="StaffPass!234",
+            is_staff=True,
+        )
+        self.client.post(
+            "/api/admin/auth/login/",
+            {"username": "staff4", "password": "StaffPass!234"},
+            content_type="application/json",
+        )
+        self.listing = Listing.objects.create(
+            user=self.staff,
+            title="Cafe Alpha",
+            business_name="Cafe Alpha",
+            city="Los Angeles",
+            state="CA",
+            contact_info="alpha@cafe.com",
+            status=Listing.Status.PUBLISHED,
+            is_featured=True,
+        )
+        ListingImage.objects.create(
+            listing=self.listing,
+            image="listings/cover.jpg",
+            role=ListingImage.Role.COVER,
+        )
+        ListingImage.objects.create(
+            listing=self.listing,
+            image="listings/gallery-1.jpg",
+            role=ListingImage.Role.GALLERY,
+        )
+        ListingImage.objects.create(
+            listing=self.listing,
+            image="listings/gallery-2.jpg",
+            role=ListingImage.Role.GALLERY,
+        )
+
+    def test_business_list_returns_lightweight_payload(self):
+        response = self.client.get("/api/admin/businesses/?page_size=25")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["count"], 1)
+        row = body["results"][0]
+        self.assertEqual(row["title"], "Cafe Alpha")
+        self.assertEqual(row["city"], "Los Angeles")
+        self.assertEqual(row["status"], "published")
+        self.assertTrue(row["is_featured"])
+        self.assertIn("thumbnail_url", row)
+        self.assertNotIn("images", row)
+        self.assertIn("cover.jpg", row["thumbnail_url"])
+
+    def test_business_list_bounded_query_count(self):
+        with CaptureQueriesContext(connection) as ctx:
+            response = self.client.get("/api/admin/businesses/?page_size=25")
+        self.assertEqual(response.status_code, 200)
+        self.assertLessEqual(len(ctx.captured_queries), 5)
+
+    def test_business_list_search_and_status_filter(self):
+        Listing.objects.create(
+            user=self.staff,
+            title="Hidden Shop",
+            city="San Diego",
+            state="CA",
+            contact_info="hidden@shop.com",
+            status=Listing.Status.HIDDEN,
+        )
+        search_response = self.client.get("/api/admin/businesses/?search=Alpha")
+        self.assertEqual(search_response.json()["count"], 1)
+
+        status_response = self.client.get("/api/admin/businesses/?status=hidden")
+        self.assertEqual(status_response.json()["count"], 1)
+        self.assertEqual(status_response.json()["results"][0]["title"], "Hidden Shop")
+
+    def test_business_detail_still_returns_full_payload(self):
+        response = self.client.get(f"/api/admin/businesses/{self.listing.id}/")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertIn("images", body)
+        self.assertEqual(len(body["images"]), 3)
