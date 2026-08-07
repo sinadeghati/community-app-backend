@@ -50,6 +50,9 @@ def _filter_businesses(qs, request):
             | Q(business_name__icontains=search)
             | Q(city__icontains=search)
         )
+    city = (request.query_params.get("city") or "").strip()
+    if city:
+        qs = qs.filter(city__icontains=city)
     status_val = request.query_params.get("status")
     if status_val:
         qs = qs.filter(status=status_val)

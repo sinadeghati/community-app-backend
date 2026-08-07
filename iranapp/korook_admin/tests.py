@@ -224,3 +224,138 @@ class AdminBusinessListPerformanceTests(TestCase):
         body = response.json()
         self.assertIn("images", body)
         self.assertEqual(len(body["images"]), 3)
+
+    def test_business_list_city_filter(self):
+        Listing.objects.create(
+            user=self.staff,
+            title="SD Shop",
+            city="San Diego",
+            state="CA",
+            contact_info="sd@shop.com",
+            status=Listing.Status.PUBLISHED,
+        )
+        response = self.client.get("/api/admin/businesses/?city=San Diego")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["count"], 1)
+        self.assertEqual(response.json()["results"][0]["title"], "SD Shop")
+
+
+class AdminBusinessCrudTests(TestCase):
+    def setUp(self):
+        self.client = Client(enforce_csrf_checks=False)
+        self.staff = User.objects.create_user(
+            username="staff5",
+            email="staff5@korook.com",
+            password="StaffPass!234",
+            is_staff=True,
+        )
+        self.owner = User.objects.create_user(
+            username="owner5",
+            email="owner5@korook.com",
+            password="OwnerPass!234",
+        )
+        self.client.post(
+            "/api/admin/auth/login/",
+            {"username": "staff5", "password": "StaffPass!234"},
+            content_type="application/json",
+        )
+        self.listing = Listing.objects.create(
+            user=self.owner,
+            owner=self.owner,
+            title="Original Title",
+            business_name="Original Title",
+            city="Los Angeles",
+            state="CA",
+            contact_info="original@shop.com",
+            status=Listing.Status.DRAFT,
+        )
+
+    def test_create_business(self):
+        response = self.client.post(
+            "/api/admin/businesses/",
+            {
+                "title": "New Shop",
+                "business_name": "New Shop",
+                "city": "Irvine",
+                "state": "CA",
+                "contact_info": "new@shop.com",
+                "category": "Restaurant",
+                "owner_id": self.owner.id,
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        body = response.json()
+        self.assertEqual(body["title"], "New Shop")
+        self.assertEqual(body["owner_id"], self.owner.id)
+
+    def test_create_business_requires_owner(self):
+        response = self.client.post(
+            "/api/admin/businesses/",
+            {
+                "title": "No Owner Shop",
+                "city": "Irvine",
+                "state": "CA",
+                "contact_info": "noowner@shop.com",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("owner_id", response.json()["detail"].lower())
+
+    def test_patch_business(self):
+        response = self.client.patch(
+            f"/api/admin/businesses/{self.listing.id}/",
+            {
+                "title": "Updated Title",
+                "description": "Updated description",
+                "phone": "555-0100",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["title"], "Updated Title")
+        self.assertEqual(body["description"], "Updated description")
+        self.assertEqual(body["phone"], "555-0100")
+
+    def test_publish_and_hide_actions(self):
+        publish = self.client.post(f"/api/admin/businesses/{self.listing.id}/publish/")
+        self.assertEqual(publish.status_code, 200)
+        self.assertEqual(publish.json()["status"], Listing.Status.PUBLISHED)
+
+        hide = self.client.post(f"/api/admin/businesses/{self.listing.id}/hide/")
+        self.assertEqual(hide.status_code, 200)
+        self.assertEqual(hide.json()["status"], Listing.Status.HIDDEN)
+
+    def test_feature_and_verify_actions(self):
+        feature = self.client.post(
+            f"/api/admin/businesses/{self.listing.id}/feature/",
+            {"is_featured": True},
+            content_type="application/json",
+        )
+        self.assertEqual(feature.status_code, 200)
+        self.assertTrue(feature.json()["is_featured"])
+
+        unfeature = self.client.post(
+            f"/api/admin/businesses/{self.listing.id}/feature/",
+            {"is_featured": False},
+            content_type="application/json",
+        )
+        self.assertEqual(unfeature.status_code, 200)
+        self.assertFalse(unfeature.json()["is_featured"])
+
+        verify = self.client.post(
+            f"/api/admin/businesses/{self.listing.id}/verify/",
+            {"verified_badge": True},
+            content_type="application/json",
+        )
+        self.assertEqual(verify.status_code, 200)
+        self.assertTrue(verify.json()["verified_badge"])
+        self.assertIsNotNone(verify.json()["verified_at"])
+
+    def test_delete_business(self):
+        listing_id = self.listing.id
+        response = self.client.delete(f"/api/admin/businesses/{listing_id}/")
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(Listing.objects.filter(pk=listing_id).exists())

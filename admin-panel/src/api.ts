@@ -5,6 +5,36 @@ function getCookie(name: string): string | null {
   return match ? decodeURIComponent(match[2]) : null;
 }
 
+export class ApiError extends Error {
+  fieldErrors: Record<string, string[]>;
+
+  constructor(message: string, fieldErrors: Record<string, string[]> = {}) {
+    super(message);
+    this.name = "ApiError";
+    this.fieldErrors = fieldErrors;
+  }
+}
+
+function parseErrorBody(body: unknown, fallback: string): ApiError {
+  if (!body || typeof body !== "object") {
+    return new ApiError(fallback);
+  }
+  const record = body as Record<string, unknown>;
+  if (typeof record.detail === "string") {
+    return new ApiError(record.detail);
+  }
+  const fieldErrors: Record<string, string[]> = {};
+  for (const [key, value] of Object.entries(record)) {
+    if (Array.isArray(value) && value.every((item) => typeof item === "string")) {
+      fieldErrors[key] = value;
+    }
+  }
+  if (Object.keys(fieldErrors).length > 0) {
+    return new ApiError("Please fix the highlighted fields.", fieldErrors);
+  }
+  return new ApiError(fallback);
+}
+
 export async function apiFetch<T>(
   path: string,
   options: RequestInit = {}
@@ -24,7 +54,7 @@ export async function apiFetch<T>(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || res.statusText);
+    throw parseErrorBody(err, res.statusText);
   }
   if (res.status === 204) return undefined as T;
   return res.json();

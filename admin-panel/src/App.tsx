@@ -3,7 +3,9 @@ import { useEffect, useState } from "react";
 import { apiFetch, ensureCsrf, type Claim, type DashboardStats, type Paginated } from "./api";
 import LoginPage from "./pages/LoginPage";
 import UsersPage from "./pages/UsersPage";
-import BusinessesPage from "./pages/BusinessesPage";
+import BusinessesListPage from "./pages/businesses/BusinessesListPage";
+import BusinessCreatePage from "./pages/businesses/BusinessCreatePage";
+import BusinessDetailPage from "./pages/businesses/BusinessDetailPage";
 import EventsPage from "./pages/EventsPage";
 import PromotionsPage from "./pages/PromotionsPage";
 import ClaimsPage from "./pages/ClaimsPage";
@@ -141,7 +143,9 @@ export default function App() {
             <Routes>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/users" element={<UsersPage />} />
-              <Route path="/businesses" element={<BusinessesPage />} />
+              <Route path="/businesses/new" element={<BusinessCreatePage />} />
+              <Route path="/businesses/:id" element={<BusinessDetailPage />} />
+              <Route path="/businesses" element={<BusinessesListPage />} />
               <Route path="/events" element={<EventsPage />} />
               <Route path="/promotions" element={<PromotionsPage />} />
               <Route path="/claims" element={<ClaimsPage />} />
