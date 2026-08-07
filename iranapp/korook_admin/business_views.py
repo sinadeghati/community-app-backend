@@ -2,7 +2,6 @@ from django.contrib.auth.models import User
 from django.db.models import Case, IntegerField, OuterRef, Q, Subquery, Value, When
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -14,7 +13,6 @@ from .pagination import AdminPageNumberPagination
 from .serializers import (
     ListingAdminListSerializer,
     ListingAdminSerializer,
-    ListingImageAdminSerializer,
 )
 
 
@@ -150,26 +148,6 @@ class AdminBusinessDetailView(AdminAPIMixin, APIView):
             summary=f"Deleted business {title}",
         )
         return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-class AdminBusinessImageView(AdminAPIMixin, APIView):
-    parser_classes = [MultiPartParser, FormParser]
-
-    def post(self, request, business_id):
-        listing = Listing.objects.filter(pk=business_id).first()
-        if not listing:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-        role = request.data.get("role", ListingImage.Role.GALLERY)
-        image = ListingImage.objects.create(
-            listing=listing,
-            image=request.data.get("image"),
-            role=role,
-            uploaded_by=request.user,
-        )
-        return Response(
-            ListingImageAdminSerializer(image, context={"request": request}).data,
-            status=status.HTTP_201_CREATED,
-        )
 
 
 class AdminBusinessActionView(AdminAPIMixin, APIView):

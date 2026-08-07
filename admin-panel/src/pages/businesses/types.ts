@@ -12,12 +12,35 @@ export type BusinessImage = {
   id: number;
   image: string;
   image_url: string | null;
+  filename?: string;
+  file_size?: number | null;
   role: "cover" | "logo" | "gallery";
   media_status: string;
   moderation_reason: string;
   uploaded_at: string;
   reviewed_at: string | null;
 };
+
+export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+export const ALLOWED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
+
+export function validateImageFile(file: File): string | null {
+  const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+  if (
+    !ALLOWED_IMAGE_TYPES.includes(file.type) &&
+    !ALLOWED_IMAGE_EXTENSIONS.includes(extension)
+  ) {
+    return "Unsupported format. Please upload PNG, JPEG, or WEBP.";
+  }
+  return null;
+}
+
+export function formatFileSize(bytes?: number | null): string {
+  if (!bytes) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 export type BusinessDetail = {
   id: number;

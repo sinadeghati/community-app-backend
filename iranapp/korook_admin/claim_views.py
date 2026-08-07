@@ -19,6 +19,9 @@ class AdminClaimListView(AdminAPIMixin, APIView):
         qs = BusinessClaim.objects.select_related(
             "listing", "requester", "reviewed_by"
         ).order_by("-created_at")
+        listing_id = request.query_params.get("listing")
+        if listing_id:
+            qs = qs.filter(listing_id=listing_id)
         status_filter = request.query_params.get("status")
         if status_filter == "all":
             pass

@@ -477,3 +477,114 @@ class AdminUserManagementTests(TestCase):
         self.assertEqual(response.status_code, 405)
         self.assertTrue(User.objects.filter(pk=self.target.id).exists())
         self.assertTrue(Listing.objects.filter(user=self.target).exists())
+
+
+class AdminBusinessMediaTests(TestCase):
+    def setUp(self):
+        self.client = Client(enforce_csrf_checks=False)
+        self.staff = User.objects.create_user(
+            username="staff7",
+            email="staff7@korook.com",
+            password="StaffPass!234",
+            is_staff=True,
+        )
+        self.client.post(
+            "/api/admin/auth/login/",
+            {"username": "staff7", "password": "StaffPass!234"},
+            content_type="application/json",
+        )
+        self.listing = Listing.objects.create(
+            user=self.staff,
+            title="Media Shop",
+            city="LA",
+            state="CA",
+            contact_info="media@shop.com",
+        )
+
+    def _upload(self, name="cover.jpg", content_type="image/jpeg", role="gallery"):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        return self.client.post(
+            f"/api/admin/businesses/{self.listing.id}/images/",
+            {
+                "image": SimpleUploadedFile(name, b"fake-image-bytes", content_type=content_type),
+                "role": role,
+            },
+        )
+
+    def test_upload_list_and_validate_image(self):
+        invalid = self._upload(name="bad.gif", content_type="image/gif")
+        self.assertEqual(invalid.status_code, 400)
+
+        upload = self._upload(role="cover")
+        self.assertEqual(upload.status_code, 201)
+        self.assertEqual(upload.json()["role"], "cover")
+        self.assertIn("filename", upload.json())
+
+        listing = self.client.get(f"/api/admin/businesses/{self.listing.id}/")
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(len(listing.json()["images"]), 1)
+
+        images = self.client.get(f"/api/admin/businesses/{self.listing.id}/images/")
+        self.assertEqual(images.status_code, 200)
+        self.assertEqual(len(images.json()), 1)
+
+    def test_set_cover_demotes_previous_cover(self):
+        first = self._upload(name="cover1.jpg", role="cover")
+        second = self._upload(name="cover2.jpg", role="cover")
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 201)
+
+        first_id = first.json()["id"]
+        second_id = second.json()["id"]
+        first_image = ListingImage.objects.get(pk=first_id)
+        second_image = ListingImage.objects.get(pk=second_id)
+        self.assertEqual(first_image.role, ListingImage.Role.GALLERY)
+        self.assertEqual(second_image.role, ListingImage.Role.COVER)
+
+    def test_set_logo_action(self):
+        gallery = self._upload(name="logo-candidate.jpg", role="gallery")
+        image_id = gallery.json()["id"]
+        response = self.client.post(
+            f"/api/admin/businesses/{self.listing.id}/images/{image_id}/set-logo/"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["role"], "logo")
+
+    def test_replace_delete_and_reorder_gallery(self):
+        one = self._upload(name="g1.jpg", role="gallery")
+        two = self._upload(name="g2.jpg", role="gallery")
+        three = self._upload(name="g3.jpg", role="gallery")
+        ids = [one.json()["id"], two.json()["id"], three.json()["id"]]
+
+        reorder = self.client.post(
+            f"/api/admin/businesses/{self.listing.id}/images/reorder/",
+            {"order": [ids[2], ids[0], ids[1]]},
+            content_type="application/json",
+        )
+        self.assertEqual(reorder.status_code, 200)
+        self.assertEqual(reorder.json()[0]["id"], ids[2])
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test.client import BOUNDARY, encode_multipart
+
+        replace_body = encode_multipart(
+            BOUNDARY,
+            {
+                "image": SimpleUploadedFile(
+                    "replacement.jpg", b"new-bytes", content_type="image/jpeg"
+                )
+            },
+        )
+        replace = self.client.patch(
+            f"/api/admin/businesses/{self.listing.id}/images/{ids[0]}/",
+            replace_body,
+            content_type=f"multipart/form-data; boundary={BOUNDARY}",
+        )
+        self.assertEqual(replace.status_code, 200)
+
+        delete = self.client.delete(
+            f"/api/admin/businesses/{self.listing.id}/images/{ids[1]}/"
+        )
+        self.assertEqual(delete.status_code, 204)
+        self.assertFalse(ListingImage.objects.filter(pk=ids[1]).exists())

@@ -1,6 +1,9 @@
+import os
+
 from django.contrib.auth.models import User
 from rest_framework import serializers
 
+from korook_admin.gallery_order import sort_listing_images
 from accounts.models import UserEmailProfile
 from listings.models import Listing, ListingImage
 from korook_platform.models import (
@@ -156,6 +159,8 @@ class AdminUserReportSummarySerializer(serializers.ModelSerializer):
 
 class ListingImageAdminSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
+    filename = serializers.SerializerMethodField()
+    file_size = serializers.SerializerMethodField()
 
     class Meta:
         model = ListingImage
@@ -163,6 +168,8 @@ class ListingImageAdminSerializer(serializers.ModelSerializer):
             "id",
             "image",
             "image_url",
+            "filename",
+            "file_size",
             "role",
             "media_status",
             "moderation_reason",
@@ -177,9 +184,22 @@ class ListingImageAdminSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(obj.image.url)
         return None
 
+    def get_filename(self, obj):
+        if not obj.image:
+            return ""
+        return os.path.basename(obj.image.name)
+
+    def get_file_size(self, obj):
+        if not obj.image:
+            return None
+        try:
+            return obj.image.size
+        except OSError:
+            return None
+
 
 class ListingAdminSerializer(serializers.ModelSerializer):
-    images = ListingImageAdminSerializer(many=True, read_only=True)
+    images = serializers.SerializerMethodField()
     owner_id = serializers.IntegerField(source="owner.id", read_only=True, allow_null=True)
     user_id = serializers.IntegerField(source="user.id", read_only=True)
 
@@ -219,6 +239,12 @@ class ListingAdminSerializer(serializers.ModelSerializer):
             "images",
         ]
         read_only_fields = ["created_at", "updated_at", "verified_at"]
+
+    def get_images(self, obj):
+        images = sort_listing_images(obj.images.all(), obj)
+        return ListingImageAdminSerializer(
+            images, many=True, context=self.context
+        ).data
 
 
 class ListingAdminListSerializer(serializers.ModelSerializer):

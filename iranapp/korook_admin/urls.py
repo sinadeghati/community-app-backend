@@ -3,10 +3,15 @@ from django.urls import path
 from .audit_views import AdminAuditLogListView, AdminSettingsView
 from .auth_views import AdminLoginView, AdminLogoutView, AdminMeView
 from .csrf_views import AdminCsrfView
+from .business_image_views import (
+    AdminBusinessImageActionView,
+    AdminBusinessImageDetailView,
+    AdminBusinessImageReorderView,
+    AdminBusinessImageView,
+)
 from .business_views import (
     AdminBusinessActionView,
     AdminBusinessDetailView,
-    AdminBusinessImageView,
     AdminBusinessListCreateView,
     AdminPremiumListingsView,
 )
@@ -57,6 +62,21 @@ urlpatterns = [
     path("businesses/", AdminBusinessListCreateView.as_view(), name="admin-businesses-list"),
     path("businesses/<int:business_id>/", AdminBusinessDetailView.as_view(), name="admin-businesses-detail"),
     path("businesses/<int:business_id>/images/", AdminBusinessImageView.as_view(), name="admin-businesses-images"),
+    path(
+        "businesses/<int:business_id>/images/reorder/",
+        AdminBusinessImageReorderView.as_view(),
+        name="admin-businesses-images-reorder",
+    ),
+    path(
+        "businesses/<int:business_id>/images/<int:image_id>/",
+        AdminBusinessImageDetailView.as_view(),
+        name="admin-businesses-images-detail",
+    ),
+    path(
+        "businesses/<int:business_id>/images/<int:image_id>/<str:action>/",
+        AdminBusinessImageActionView.as_view(),
+        name="admin-businesses-images-action",
+    ),
     path(
         "businesses/<int:business_id>/<str:action>/",
         AdminBusinessActionView.as_view(),

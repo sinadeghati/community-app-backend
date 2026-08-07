@@ -20,6 +20,9 @@ class AdminAuditLogListView(AdminAPIMixin, APIView):
         action_type = request.query_params.get("action_type")
         if action_type:
             qs = qs.filter(action_type=action_type)
+        object_id = request.query_params.get("object_id")
+        if object_id:
+            qs = qs.filter(object_id=object_id)
         paginator = AdminPageNumberPagination()
         page = paginator.paginate_queryset(qs, request)
         return paginator.get_paginated_response(AdminAuditLogSerializer(page, many=True).data)

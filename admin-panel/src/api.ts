@@ -64,6 +64,76 @@ export async function ensureCsrf() {
   await apiFetch<{ csrfToken: string }>("/admin/auth/csrf/");
 }
 
+export function apiUpload<T>(
+  path: string,
+  formData: FormData,
+  onProgress?: (percent: number) => void
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_BASE}${path}`);
+    xhr.withCredentials = true;
+    const csrf = getCookie("csrftoken");
+    if (csrf) {
+      xhr.setRequestHeader("X-CSRFToken", csrf);
+    }
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && onProgress) {
+        onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(xhr.responseText ? JSON.parse(xhr.responseText) : undefined);
+        return;
+      }
+      try {
+        const body = JSON.parse(xhr.responseText);
+        reject(parseErrorBody(body, xhr.statusText));
+      } catch {
+        reject(new ApiError(xhr.statusText));
+      }
+    };
+    xhr.onerror = () => reject(new ApiError("Upload failed."));
+    xhr.send(formData);
+  });
+}
+
+export function apiUploadPatch<T>(
+  path: string,
+  formData: FormData,
+  onProgress?: (percent: number) => void
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PATCH", `${API_BASE}${path}`);
+    xhr.withCredentials = true;
+    const csrf = getCookie("csrftoken");
+    if (csrf) {
+      xhr.setRequestHeader("X-CSRFToken", csrf);
+    }
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && onProgress) {
+        onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(JSON.parse(xhr.responseText));
+        return;
+      }
+      try {
+        const body = JSON.parse(xhr.responseText);
+        reject(parseErrorBody(body, xhr.statusText));
+      } catch {
+        reject(new ApiError(xhr.statusText));
+      }
+    };
+    xhr.onerror = () => reject(new ApiError("Upload failed."));
+    xhr.send(formData);
+  });
+}
+
 export type DashboardStats = {
   users_total: number;
   users_suspended: number;
