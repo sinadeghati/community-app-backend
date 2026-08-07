@@ -21,6 +21,9 @@ class AdminReportListView(AdminAPIMixin, APIView):
         object_type = request.query_params.get("object_type")
         if object_type:
             qs = qs.filter(reported_object_type=object_type)
+        object_id = request.query_params.get("object_id")
+        if object_id:
+            qs = qs.filter(reported_object_id=object_id)
         paginator = AdminPageNumberPagination()
         page = paginator.paginate_queryset(qs, request)
         return paginator.get_paginated_response(

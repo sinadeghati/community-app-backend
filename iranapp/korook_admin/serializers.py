@@ -4,6 +4,13 @@ from django.contrib.auth.models import User
 from rest_framework import serializers
 
 from korook_admin.gallery_order import sort_listing_images
+from korook_admin.event_admin_meta import (
+    gallery_items,
+    read_admin_note_text,
+    read_event_meta,
+    update_event_fields_from_payload,
+    write_event_meta,
+)
 from accounts.models import UserEmailProfile
 from listings.models import Listing, ListingImage
 from korook_platform.models import (
@@ -275,10 +282,66 @@ class ListingAdminListSerializer(serializers.ModelSerializer):
 
         return request.build_absolute_uri(default_storage.url(thumbnail_name))
 
+class EventAdminListSerializer(serializers.ModelSerializer):
+    cover_image_url = serializers.SerializerMethodField()
+    listing_title = serializers.SerializerMethodField()
+    owner_username = serializers.CharField(source="owner.username", read_only=True)
+    organizer_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Event
+        fields = [
+            "id",
+            "title",
+            "cover_image_url",
+            "listing_id",
+            "listing_title",
+            "owner_id",
+            "owner_username",
+            "organizer",
+            "organizer_name",
+            "category",
+            "city",
+            "starts_at",
+            "ends_at",
+            "status",
+            "is_featured",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_cover_image_url(self, obj):
+        request = self.context.get("request")
+        if obj.cover_image and request:
+            return request.build_absolute_uri(obj.cover_image.url)
+        return None
+
+    def get_listing_title(self, obj):
+        return obj.listing.title if obj.listing_id else None
+
+    def get_organizer_name(self, obj):
+        if obj.organizer:
+            return obj.organizer
+        return obj.owner.username if obj.owner_id else ""
+
+
 class EventAdminSerializer(serializers.ModelSerializer):
     owner_id = serializers.IntegerField(source="owner.id", read_only=True)
-    listing_id = serializers.IntegerField(source="listing.id", read_only=True, allow_null=True)
+    owner_username = serializers.CharField(source="owner.username", read_only=True)
+    listing_id = serializers.IntegerField(allow_null=True, required=False)
+    listing_title = serializers.SerializerMethodField()
     cover_image_url = serializers.SerializerMethodField()
+    tags = serializers.ListField(child=serializers.CharField(), required=False)
+    phone = serializers.CharField(required=False, allow_blank=True)
+    website = serializers.CharField(required=False, allow_blank=True)
+    instagram = serializers.CharField(required=False, allow_blank=True)
+    visibility = serializers.SerializerMethodField()
+    gallery = serializers.SerializerMethodField()
+    media_count = serializers.SerializerMethodField()
+    promotions_count = serializers.SerializerMethodField()
+    reports_count = serializers.SerializerMethodField()
+    claims_count = serializers.SerializerMethodField()
+    admin_note_text = serializers.SerializerMethodField()
 
     class Meta:
         model = Event
@@ -301,7 +364,9 @@ class EventAdminSerializer(serializers.ModelSerializer):
             "ticket_url",
             "ticket_provider_label",
             "listing_id",
+            "listing_title",
             "owner_id",
+            "owner_username",
             "status",
             "is_featured",
             "is_sponsored",
@@ -311,6 +376,17 @@ class EventAdminSerializer(serializers.ModelSerializer):
             "cover_media_status",
             "cover_moderation_reason",
             "admin_note",
+            "admin_note_text",
+            "tags",
+            "phone",
+            "website",
+            "instagram",
+            "visibility",
+            "gallery",
+            "media_count",
+            "promotions_count",
+            "reports_count",
+            "claims_count",
             "created_at",
             "updated_at",
         ]
@@ -321,6 +397,129 @@ class EventAdminSerializer(serializers.ModelSerializer):
         if obj.cover_image and request:
             return request.build_absolute_uri(obj.cover_image.url)
         return None
+
+    def get_listing_title(self, obj):
+        return obj.listing.title if obj.listing_id else None
+
+    def get_visibility(self, obj):
+        if obj.status == Event.Status.PUBLISHED:
+            return "public"
+        if obj.status == Event.Status.HIDDEN:
+            return "hidden"
+        return "draft"
+
+    def get_gallery(self, obj):
+        request = self.context.get("request")
+        items = []
+        for item in gallery_items(obj):
+            storage_path = item.get("storage_path")
+            image_url = None
+            if storage_path and request:
+                from django.core.files.storage import default_storage
+
+                if default_storage.exists(storage_path):
+                    image_url = request.build_absolute_uri(default_storage.url(storage_path))
+            items.append({**item, "image_url": image_url})
+        return items
+
+    def get_media_count(self, obj):
+        return (1 if obj.cover_image else 0) + len(gallery_items(obj))
+
+    def get_promotions_count(self, obj):
+        count = getattr(obj, "promotions_count", None)
+        return count if count is not None else obj.promotions.count()
+
+    def get_reports_count(self, obj):
+        count = getattr(obj, "reports_count", None)
+        return count if count is not None else obj.content_reports.count()
+
+    def get_claims_count(self, obj):
+        if not obj.listing_id:
+            return 0
+        return obj.listing.claims.count()
+
+    def get_admin_note_text(self, obj):
+        return read_admin_note_text(obj)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        meta = read_event_meta(instance)
+        contact = meta.get("contact", {})
+        data["tags"] = meta.get("tags", [])
+        data["phone"] = contact.get("phone", "")
+        data["website"] = contact.get("website", "")
+        data["instagram"] = contact.get("instagram", "")
+        return data
+
+    def update(self, instance, validated_data):
+        tags = validated_data.pop("tags", None)
+        phone = validated_data.pop("phone", None)
+        website = validated_data.pop("website", None)
+        instagram = validated_data.pop("instagram", None)
+        admin_note_text = self.initial_data.get("admin_note_text")
+
+        visibility = self.initial_data.get("visibility")
+        if visibility == "public":
+            validated_data["status"] = Event.Status.PUBLISHED
+        elif visibility == "hidden":
+            validated_data["status"] = Event.Status.HIDDEN
+        elif visibility == "draft":
+            validated_data["status"] = Event.Status.DRAFT
+
+        listing_id = validated_data.pop("listing_id", None)
+        if listing_id is not None:
+            from listings.models import Listing
+
+            instance.listing = Listing.objects.filter(pk=listing_id).first()
+        elif "listing_id" in self.initial_data and self.initial_data.get("listing_id") in ("", None):
+            instance.listing = None
+
+        instance = super().update(instance, validated_data)
+
+        payload = {}
+        if tags is not None:
+            payload["tags"] = tags
+        if phone is not None:
+            payload["phone"] = phone
+        if website is not None:
+            payload["website"] = website
+        if instagram is not None:
+            payload["instagram"] = instagram
+        if payload:
+            update_event_fields_from_payload(instance, payload)
+
+        if admin_note_text is not None:
+            meta = read_event_meta(instance)
+            write_event_meta(instance, meta, str(admin_note_text))
+
+        return instance
+
+    def create(self, validated_data):
+        tags = validated_data.pop("tags", None)
+        phone = validated_data.pop("phone", None)
+        website = validated_data.pop("website", None)
+        instagram = validated_data.pop("instagram", None)
+        listing_id = validated_data.pop("listing_id", None)
+        validated_data.pop("visibility", None)
+
+        if listing_id:
+            from listings.models import Listing
+
+            validated_data["listing"] = Listing.objects.filter(pk=listing_id).first()
+
+        instance = super().create(validated_data)
+        payload = {}
+        if tags is not None:
+            payload["tags"] = tags
+        if phone is not None:
+            payload["phone"] = phone
+        if website is not None:
+            payload["website"] = website
+        if instagram is not None:
+            payload["instagram"] = instagram
+        if payload:
+            update_event_fields_from_payload(instance, payload)
+        return instance
 
 
 class PromotionAdminSerializer(serializers.ModelSerializer):

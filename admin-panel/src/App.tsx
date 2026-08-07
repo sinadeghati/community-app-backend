@@ -7,7 +7,9 @@ import UserDetailPage from "./pages/users/UserDetailPage";
 import BusinessesListPage from "./pages/businesses/BusinessesListPage";
 import BusinessCreatePage from "./pages/businesses/BusinessCreatePage";
 import BusinessDetailPage from "./pages/businesses/BusinessDetailPage";
-import EventsPage from "./pages/EventsPage";
+import EventsListPage from "./pages/events/EventsListPage";
+import EventCreatePage from "./pages/events/EventCreatePage";
+import EventDetailPage from "./pages/events/EventDetailPage";
 import PromotionsPage from "./pages/PromotionsPage";
 import ClaimsPage from "./pages/ClaimsPage";
 import ReportsPage from "./pages/ReportsPage";
@@ -148,7 +150,9 @@ export default function App() {
               <Route path="/businesses/new" element={<BusinessCreatePage />} />
               <Route path="/businesses/:id" element={<BusinessDetailPage />} />
               <Route path="/businesses" element={<BusinessesListPage />} />
-              <Route path="/events" element={<EventsPage />} />
+              <Route path="/events/new" element={<EventCreatePage />} />
+              <Route path="/events/:id" element={<EventDetailPage />} />
+              <Route path="/events" element={<EventsListPage />} />
               <Route path="/promotions" element={<PromotionsPage />} />
               <Route path="/claims" element={<ClaimsPage />} />
               <Route path="/reports" element={<ReportsPage />} />

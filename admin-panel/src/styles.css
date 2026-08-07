@@ -501,3 +501,38 @@ table button.danger {
 .media-preview-modal { width: min(720px, 100%); }
 .compact-meta { margin-top: 1rem; }
 .inline-actions { margin-top: 1rem; padding-top: 0; border: none; }
+.table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.table-actions button {
+  font-size: 0.8rem;
+  padding: 0.25rem 0.5rem;
+}
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+.preview-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  background: #fafbfd;
+}
+.preview-cover {
+  width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+  border-radius: 10px;
+  margin-bottom: 0.75rem;
+}
+.preview-cover.wide { max-height: 220px; }
+.preview-modal.mobile { width: min(360px, 100%); }
+.preview-modal.website { width: min(720px, 100%); }
+.danger-panel { border-color: rgba(220, 38, 38, 0.25); }
+button.danger, .button-link.danger {
+  background: #dc2626;
+  color: white;
+}

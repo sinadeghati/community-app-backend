@@ -23,6 +23,11 @@ from .claim_views import (
 )
 from .dashboard_views import DashboardStatsView
 from .event_views import AdminEventActionView, AdminEventDetailView, AdminEventListCreateView
+from .event_image_views import (
+    AdminEventMediaDetailView,
+    AdminEventMediaReorderView,
+    AdminEventMediaView,
+)
 from .media_views import AdminEventCoverMediaView, AdminMediaActionView, AdminMediaListView
 from .promotion_views import (
     AdminPromotionActionView,
@@ -85,6 +90,17 @@ urlpatterns = [
     path("premium-listings/", AdminPremiumListingsView.as_view(), name="admin-premium-listings"),
     path("events/", AdminEventListCreateView.as_view(), name="admin-events-list"),
     path("events/<int:event_id>/", AdminEventDetailView.as_view(), name="admin-events-detail"),
+    path("events/<int:event_id>/media/", AdminEventMediaView.as_view(), name="admin-events-media"),
+    path(
+        "events/<int:event_id>/media/reorder/",
+        AdminEventMediaReorderView.as_view(),
+        name="admin-events-media-reorder",
+    ),
+    path(
+        "events/<int:event_id>/media/<str:image_id>/",
+        AdminEventMediaDetailView.as_view(),
+        name="admin-events-media-detail",
+    ),
     path(
         "events/<int:event_id>/<str:action>/",
         AdminEventActionView.as_view(),

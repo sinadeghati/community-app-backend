@@ -588,3 +588,138 @@ class AdminBusinessMediaTests(TestCase):
         )
         self.assertEqual(delete.status_code, 204)
         self.assertFalse(ListingImage.objects.filter(pk=ids[1]).exists())
+
+
+class AdminEventManagementTests(TestCase):
+    def setUp(self):
+        self.client = Client(enforce_csrf_checks=False)
+        self.staff = User.objects.create_user(
+            username="staff8",
+            email="staff8@korook.com",
+            password="StaffPass!234",
+            is_staff=True,
+        )
+        self.owner = User.objects.create_user(
+            username="event_owner",
+            email="owner@korook.com",
+            password="OwnerPass!234",
+        )
+        self.client.post(
+            "/api/admin/auth/login/",
+            {"username": "staff8", "password": "StaffPass!234"},
+            content_type="application/json",
+        )
+        self.event = Event.objects.create(
+            title="Community Night",
+            description="A fun evening",
+            category="Community",
+            starts_at=timezone.now() + timezone.timedelta(days=3),
+            city="Los Angeles",
+            state="CA",
+            owner=self.owner,
+            status=Event.Status.DRAFT,
+        )
+
+    def test_event_list_search_filters_and_sort(self):
+        response = self.client.get("/api/admin/events/?search=Community")
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(response.json()["count"], 1)
+        row = response.json()["results"][0]
+        self.assertIn("cover_image_url", row)
+        self.assertIn("listing_title", row)
+
+        filtered = self.client.get("/api/admin/events/?status=draft&featured=false")
+        self.assertEqual(filtered.status_code, 200)
+
+    def test_event_create_update_and_publish(self):
+        create = self.client.post(
+            "/api/admin/events/",
+            {
+                "title": "New Admin Event",
+                "description": "Created in tests",
+                "category": "Music",
+                "starts_at": (timezone.now() + timezone.timedelta(days=5)).isoformat(),
+                "city": "LA",
+                "state": "CA",
+                "owner_id": self.owner.id,
+                "status": "draft",
+                "tags": ["live", "music"],
+                "phone": "555-0100",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(create.status_code, 201)
+        event_id = create.json()["id"]
+        self.assertEqual(create.json()["tags"], ["live", "music"])
+
+        patch = self.client.patch(
+            f"/api/admin/events/{event_id}/",
+            {"title": "Updated Event Title", "website": "https://korook.com"},
+            content_type="application/json",
+        )
+        self.assertEqual(patch.status_code, 200)
+        self.assertEqual(patch.json()["title"], "Updated Event Title")
+
+        publish = self.client.post(f"/api/admin/events/{event_id}/publish/")
+        self.assertEqual(publish.status_code, 200)
+        self.assertEqual(publish.json()["status"], "published")
+
+    def test_event_feature_hide_duplicate_delete(self):
+        feature = self.client.post(f"/api/admin/events/{self.event.id}/feature/")
+        self.assertEqual(feature.status_code, 200)
+        self.assertTrue(feature.json()["is_featured"])
+
+        hide = self.client.post(f"/api/admin/events/{self.event.id}/hide/")
+        self.assertEqual(hide.status_code, 200)
+        self.assertEqual(hide.json()["status"], "hidden")
+
+        duplicate = self.client.post(f"/api/admin/events/{self.event.id}/duplicate/")
+        self.assertEqual(duplicate.status_code, 201)
+        self.assertTrue(duplicate.json()["title"].startswith("Copy of"))
+
+        delete = self.client.delete(f"/api/admin/events/{duplicate.json()['id']}/")
+        self.assertEqual(delete.status_code, 204)
+
+    def test_event_media_upload_gallery_and_reorder(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        cover = self.client.post(
+            f"/api/admin/events/{self.event.id}/media/",
+            {
+                "image": SimpleUploadedFile("cover.jpg", b"cover-bytes", content_type="image/jpeg"),
+                "role": "cover",
+            },
+        )
+        self.assertEqual(cover.status_code, 201)
+        self.assertIsNotNone(cover.json()["cover_image_url"])
+
+        gallery = self.client.post(
+            f"/api/admin/events/{self.event.id}/media/",
+            {
+                "image": SimpleUploadedFile("g1.jpg", b"g1", content_type="image/jpeg"),
+                "role": "gallery",
+            },
+        )
+        self.assertEqual(gallery.status_code, 201)
+        image_id = gallery.json()["id"]
+
+        reorder = self.client.post(
+            f"/api/admin/events/{self.event.id}/media/reorder/",
+            {"order": [image_id]},
+            content_type="application/json",
+        )
+        self.assertEqual(reorder.status_code, 200)
+
+        invalid = self.client.post(
+            f"/api/admin/events/{self.event.id}/media/",
+            {
+                "image": SimpleUploadedFile("bad.gif", b"x", content_type="image/gif"),
+                "role": "gallery",
+            },
+        )
+        self.assertEqual(invalid.status_code, 400)
+
+        delete = self.client.delete(
+            f"/api/admin/events/{self.event.id}/media/{image_id}/"
+        )
+        self.assertEqual(delete.status_code, 204)

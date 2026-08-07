@@ -23,6 +23,9 @@ class AdminPromotionListCreateView(AdminAPIMixin, APIView):
         status_val = request.query_params.get("status")
         if status_val:
             qs = qs.filter(status=status_val)
+        event_id = request.query_params.get("event")
+        if event_id:
+            qs = qs.filter(event_id=event_id)
         paginator = AdminPageNumberPagination()
         page = paginator.paginate_queryset(qs, request)
         return paginator.get_paginated_response(
