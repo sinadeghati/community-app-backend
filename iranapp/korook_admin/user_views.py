@@ -1,5 +1,5 @@
 from django.contrib.auth.models import User
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
@@ -7,17 +7,36 @@ from rest_framework.views import APIView
 
 from accounts.models import get_or_create_email_profile
 from korook_admin.audit import log_admin_action
+from korook_platform.models import BusinessClaim, ContentReport, Event, UserPlatformProfile
 from listings.models import Listing
-from korook_platform.models import ContentReport, Event, UserPlatformProfile
 
 from .mixins import AdminAPIMixin
 from .pagination import AdminPageNumberPagination
-from .serializers import AdminUserDetailSerializer, AdminUserListSerializer
+from .serializers import (
+    AdminUserBusinessSummarySerializer,
+    AdminUserClaimSummarySerializer,
+    AdminUserDetailSerializer,
+    AdminUserEventSummarySerializer,
+    AdminUserListSerializer,
+    AdminUserReportSummarySerializer,
+)
 
 
 def _user_queryset():
-    return User.objects.select_related("platform_profile", "email_profile").order_by(
-        "-date_joined"
+    return (
+        User.objects.select_related(
+            "platform_profile",
+            "platform_profile__suspended_by",
+            "email_profile",
+        )
+        .annotate(
+            businesses_created_count=Count("listings", distinct=True),
+            businesses_owned_count=Count("owned_listings", distinct=True),
+            events_count=Count("owned_events", distinct=True),
+            claims_count=Count("business_claims", distinct=True),
+            reports_count=Count("reports_against", distinct=True),
+        )
+        .order_by("-date_joined")
     )
 
 
@@ -42,6 +61,16 @@ def _filter_users(queryset, request):
             email_profile__email_verified=(email_verified == "true")
         )
     return queryset
+
+
+def _protected_user_error(user, actor):
+    if user.id == actor.id:
+        return "You cannot perform this action on your own account."
+    if user.is_superuser:
+        return "Superuser accounts cannot be modified this way."
+    if user.is_staff:
+        return "Staff accounts cannot be modified this way."
+    return None
 
 
 class AdminUserListView(AdminAPIMixin, APIView):
@@ -108,6 +137,10 @@ def _set_user_status(request, user_id, status_value):
     user = User.objects.filter(pk=user_id).first()
     if not user:
         return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+    if status_value == UserPlatformProfile.AccountStatus.SUSPENDED:
+        protected = _protected_user_error(user, request.user)
+        if protected:
+            return Response({"detail": protected}, status=status.HTTP_403_FORBIDDEN)
     profile, _ = UserPlatformProfile.objects.get_or_create(user=user)
     before = profile.account_status
     profile.account_status = status_value
@@ -171,35 +204,43 @@ class AdminUserUnverifyEmailView(AdminAPIMixin, APIView):
 
 class AdminUserBusinessesView(AdminAPIMixin, APIView):
     def get(self, request, user_id):
-        from .serializers import ListingAdminSerializer
-
-        qs = Listing.objects.filter(Q(user_id=user_id) | Q(owner_id=user_id))
+        qs = Listing.objects.filter(Q(user_id=user_id) | Q(owner_id=user_id)).order_by(
+            "-created_at"
+        )
         paginator = AdminPageNumberPagination()
         page = paginator.paginate_queryset(qs, request)
         return paginator.get_paginated_response(
-            ListingAdminSerializer(page, many=True, context={"request": request}).data
+            AdminUserBusinessSummarySerializer(page, many=True).data
         )
 
 
 class AdminUserEventsView(AdminAPIMixin, APIView):
     def get(self, request, user_id):
-        from .serializers import EventAdminSerializer
-
-        qs = Event.objects.filter(owner_id=user_id)
+        qs = Event.objects.filter(owner_id=user_id).order_by("-starts_at")
         paginator = AdminPageNumberPagination()
         page = paginator.paginate_queryset(qs, request)
         return paginator.get_paginated_response(
-            EventAdminSerializer(page, many=True, context={"request": request}).data
+            AdminUserEventSummarySerializer(page, many=True).data
+        )
+
+
+class AdminUserClaimsView(AdminAPIMixin, APIView):
+    def get(self, request, user_id):
+        qs = BusinessClaim.objects.filter(requester_id=user_id).select_related(
+            "listing"
+        ).order_by("-created_at")
+        paginator = AdminPageNumberPagination()
+        page = paginator.paginate_queryset(qs, request)
+        return paginator.get_paginated_response(
+            AdminUserClaimSummarySerializer(page, many=True).data
         )
 
 
 class AdminUserReportsView(AdminAPIMixin, APIView):
     def get(self, request, user_id):
-        from .serializers import ContentReportAdminSerializer
-
-        qs = ContentReport.objects.filter(reported_user_id=user_id)
+        qs = ContentReport.objects.filter(reported_user_id=user_id).order_by("-created_at")
         paginator = AdminPageNumberPagination()
         page = paginator.paginate_queryset(qs, request)
         return paginator.get_paginated_response(
-            ContentReportAdminSerializer(page, many=True).data
+            AdminUserReportSummarySerializer(page, many=True).data
         )

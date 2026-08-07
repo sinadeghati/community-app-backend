@@ -278,6 +278,18 @@ table button.danger {
   background: rgba(0, 194, 184, 0.15);
   color: #0b6f69;
 }
+.badge.success {
+  background: rgba(5, 150, 105, 0.12);
+  color: #047857;
+}
+.badge.warning {
+  background: rgba(217, 119, 6, 0.12);
+  color: #b45309;
+}
+.badge.danger {
+  background: rgba(220, 38, 38, 0.12);
+  color: #b91c1c;
+}
 .detail-meta h2,
 .panel h2,
 .panel h3 {

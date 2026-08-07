@@ -18,6 +18,8 @@ class AdminUserListSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
     account_status = serializers.SerializerMethodField()
     admin_note = serializers.SerializerMethodField()
+    display_name = serializers.SerializerMethodField()
+    businesses_count = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -25,6 +27,9 @@ class AdminUserListSerializer(serializers.ModelSerializer):
             "id",
             "username",
             "email",
+            "first_name",
+            "last_name",
+            "display_name",
             "is_active",
             "is_staff",
             "last_login",
@@ -33,10 +38,22 @@ class AdminUserListSerializer(serializers.ModelSerializer):
             "role",
             "account_status",
             "admin_note",
+            "businesses_count",
         ]
 
     def _profile(self, obj):
         return getattr(obj, "platform_profile", None)
+
+    def get_display_name(self, obj):
+        full_name = f"{obj.first_name} {obj.last_name}".strip()
+        return full_name or obj.username
+
+    def get_businesses_count(self, obj):
+        created = getattr(obj, "businesses_created_count", None)
+        owned = getattr(obj, "businesses_owned_count", None)
+        if created is not None or owned is not None:
+            return (created or 0) + (owned or 0)
+        return None
 
     def get_email_verified(self, obj):
         try:
@@ -58,7 +75,83 @@ class AdminUserListSerializer(serializers.ModelSerializer):
 
 
 class AdminUserDetailSerializer(AdminUserListSerializer):
-    pass
+    is_superuser = serializers.BooleanField(read_only=True)
+    suspended_at = serializers.SerializerMethodField()
+    suspended_by_id = serializers.SerializerMethodField()
+    suspended_by_username = serializers.SerializerMethodField()
+    events_count = serializers.SerializerMethodField()
+    claims_count = serializers.SerializerMethodField()
+    reports_count = serializers.SerializerMethodField()
+
+    class Meta(AdminUserListSerializer.Meta):
+        fields = AdminUserListSerializer.Meta.fields + [
+            "is_superuser",
+            "suspended_at",
+            "suspended_by_id",
+            "suspended_by_username",
+            "events_count",
+            "claims_count",
+            "reports_count",
+        ]
+
+    def get_suspended_at(self, obj):
+        profile = self._profile(obj)
+        return profile.suspended_at if profile else None
+
+    def get_suspended_by_id(self, obj):
+        profile = self._profile(obj)
+        return profile.suspended_by_id if profile and profile.suspended_by_id else None
+
+    def get_suspended_by_username(self, obj):
+        profile = self._profile(obj)
+        if profile and profile.suspended_by_id:
+            return profile.suspended_by.username
+        return None
+
+    def get_events_count(self, obj):
+        count = getattr(obj, "events_count", None)
+        return count if count is not None else 0
+
+    def get_claims_count(self, obj):
+        count = getattr(obj, "claims_count", None)
+        return count if count is not None else 0
+
+    def get_reports_count(self, obj):
+        count = getattr(obj, "reports_count", None)
+        return count if count is not None else 0
+
+
+class AdminUserBusinessSummarySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Listing
+        fields = ["id", "title", "city", "status", "is_featured"]
+
+
+class AdminUserEventSummarySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Event
+        fields = ["id", "title", "city", "status", "starts_at", "is_featured"]
+
+
+class AdminUserClaimSummarySerializer(serializers.ModelSerializer):
+    listing_title = serializers.CharField(source="listing.title", read_only=True)
+
+    class Meta:
+        model = BusinessClaim
+        fields = ["id", "listing", "listing_title", "status", "created_at"]
+
+
+class AdminUserReportSummarySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContentReport
+        fields = [
+            "id",
+            "reported_object_type",
+            "reported_object_id",
+            "reason",
+            "status",
+            "created_at",
+        ]
 
 
 class ListingImageAdminSerializer(serializers.ModelSerializer):

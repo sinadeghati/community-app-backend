@@ -6,7 +6,7 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from listings.models import Listing, ListingImage
-from korook_platform.models import BusinessClaim, UserPlatformProfile
+from korook_platform.models import BusinessClaim, Event, UserPlatformProfile
 
 from .dashboard_views import DASHBOARD_STATS_CACHE_KEY, build_dashboard_stats
 
@@ -359,3 +359,121 @@ class AdminBusinessCrudTests(TestCase):
         response = self.client.delete(f"/api/admin/businesses/{listing_id}/")
         self.assertEqual(response.status_code, 204)
         self.assertFalse(Listing.objects.filter(pk=listing_id).exists())
+
+
+class AdminUserManagementTests(TestCase):
+    def setUp(self):
+        self.client = Client(enforce_csrf_checks=False)
+        self.staff = User.objects.create_user(
+            username="staff6",
+            email="staff6@korook.com",
+            password="StaffPass!234",
+            is_staff=True,
+        )
+        self.target = User.objects.create_user(
+            username="target_user",
+            email="target@korook.com",
+            password="TargetPass!234",
+            first_name="Target",
+            last_name="User",
+        )
+        self.superuser = User.objects.create_user(
+            username="protected_admin",
+            email="protected@korook.com",
+            password="AdminPass!234",
+            is_staff=True,
+            is_superuser=True,
+        )
+        self.client.post(
+            "/api/admin/auth/login/",
+            {"username": "staff6", "password": "StaffPass!234"},
+            content_type="application/json",
+        )
+        Listing.objects.create(
+            user=self.target,
+            owner=self.target,
+            title="Target Cafe",
+            city="LA",
+            state="CA",
+            contact_info="target@korook.com",
+            status=Listing.Status.PUBLISHED,
+        )
+        Event.objects.create(
+            title="Target Event",
+            owner=self.target,
+            starts_at=timezone.now(),
+            city="LA",
+            state="CA",
+            status=Event.Status.PUBLISHED,
+        )
+        BusinessClaim.objects.create(
+            listing=Listing.objects.get(user=self.target),
+            requester=self.target,
+        )
+
+    def test_user_list_search_and_filters(self):
+        response = self.client.get("/api/admin/users/?search=target")
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(response.json()["count"], 1)
+
+        suspended_filter = self.client.get("/api/admin/users/?account_status=active")
+        self.assertEqual(suspended_filter.status_code, 200)
+
+        verified_filter = self.client.get("/api/admin/users/?email_verified=false")
+        self.assertEqual(verified_filter.status_code, 200)
+
+    def test_user_list_includes_summary_fields(self):
+        response = self.client.get("/api/admin/users/?search=target_user")
+        self.assertEqual(response.status_code, 200)
+        row = response.json()["results"][0]
+        self.assertEqual(row["username"], "target_user")
+        self.assertEqual(row["display_name"], "Target User")
+        self.assertIn("businesses_count", row)
+        self.assertNotIn("password", row)
+
+    def test_user_detail_get(self):
+        response = self.client.get(f"/api/admin/users/{self.target.id}/")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["email"], "target@korook.com")
+        self.assertGreaterEqual(body["businesses_count"], 1)
+        self.assertGreaterEqual(body["events_count"], 1)
+        self.assertGreaterEqual(body["claims_count"], 1)
+
+    def test_user_businesses_endpoint_is_lightweight(self):
+        response = self.client.get(f"/api/admin/users/{self.target.id}/businesses/")
+        self.assertEqual(response.status_code, 200)
+        row = response.json()["results"][0]
+        self.assertIn("title", row)
+        self.assertNotIn("images", row)
+
+    def test_user_claims_endpoint(self):
+        response = self.client.get(f"/api/admin/users/{self.target.id}/claims/")
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(response.json()["count"], 1)
+
+    def test_suspend_and_unsuspend_user(self):
+        suspend = self.client.post(f"/api/admin/users/{self.target.id}/suspend/")
+        self.assertEqual(suspend.status_code, 200)
+        self.assertEqual(suspend.json()["account_status"], "suspended")
+        self.target.refresh_from_db()
+        self.assertFalse(self.target.is_active)
+
+        unsuspend = self.client.post(f"/api/admin/users/{self.target.id}/unsuspend/")
+        self.assertEqual(unsuspend.status_code, 200)
+        self.assertEqual(unsuspend.json()["account_status"], "active")
+        self.target.refresh_from_db()
+        self.assertTrue(self.target.is_active)
+
+    def test_cannot_suspend_staff_or_self(self):
+        self_response = self.client.post(f"/api/admin/users/{self.staff.id}/suspend/")
+        self.assertEqual(self_response.status_code, 403)
+
+        protected = self.client.post(f"/api/admin/users/{self.superuser.id}/suspend/")
+        self.assertEqual(protected.status_code, 403)
+
+    def test_no_admin_delete_endpoint(self):
+        response = self.client.delete(f"/api/admin/users/{self.target.id}/")
+        self.assertEqual(response.status_code, 405)
+        self.assertTrue(User.objects.filter(pk=self.target.id).exists())
+        self.assertTrue(Listing.objects.filter(user=self.target).exists())

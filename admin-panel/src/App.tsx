@@ -2,7 +2,8 @@ import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { apiFetch, ensureCsrf, type Claim, type DashboardStats, type Paginated } from "./api";
 import LoginPage from "./pages/LoginPage";
-import UsersPage from "./pages/UsersPage";
+import UsersListPage from "./pages/users/UsersListPage";
+import UserDetailPage from "./pages/users/UserDetailPage";
 import BusinessesListPage from "./pages/businesses/BusinessesListPage";
 import BusinessCreatePage from "./pages/businesses/BusinessCreatePage";
 import BusinessDetailPage from "./pages/businesses/BusinessDetailPage";
@@ -142,7 +143,8 @@ export default function App() {
           <Shell onLogout={logout}>
             <Routes>
               <Route path="/" element={<DashboardPage />} />
-              <Route path="/users" element={<UsersPage />} />
+              <Route path="/users/:id" element={<UserDetailPage />} />
+              <Route path="/users" element={<UsersListPage />} />
               <Route path="/businesses/new" element={<BusinessCreatePage />} />
               <Route path="/businesses/:id" element={<BusinessDetailPage />} />
               <Route path="/businesses" element={<BusinessesListPage />} />
