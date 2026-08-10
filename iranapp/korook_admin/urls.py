@@ -33,7 +33,9 @@ from .promotion_views import (
     AdminPromotionActionView,
     AdminPromotionDetailView,
     AdminPromotionListCreateView,
+    AdminPromotionReorderView,
 )
+from .promotion_image_views import AdminPromotionHeroImageView
 from .report_views import AdminReportActionView, AdminReportDetailView, AdminReportListView
 from .user_views import (
     AdminUserBusinessesView,
@@ -107,7 +109,17 @@ urlpatterns = [
         name="admin-events-action",
     ),
     path("promotions/", AdminPromotionListCreateView.as_view(), name="admin-promotions-list"),
+    path(
+        "promotions/reorder/",
+        AdminPromotionReorderView.as_view(),
+        name="admin-promotions-reorder",
+    ),
     path("promotions/<int:promotion_id>/", AdminPromotionDetailView.as_view(), name="admin-promotions-detail"),
+    path(
+        "promotions/<int:promotion_id>/hero-image/",
+        AdminPromotionHeroImageView.as_view(),
+        name="admin-promotions-hero-image",
+    ),
     path(
         "promotions/<int:promotion_id>/<str:action>/",
         AdminPromotionActionView.as_view(),

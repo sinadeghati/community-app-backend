@@ -6,7 +6,7 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from listings.models import Listing, ListingImage
-from korook_platform.models import BusinessClaim, Event, UserPlatformProfile
+from korook_platform.models import BusinessClaim, Event, Promotion, UserPlatformProfile
 
 from .dashboard_views import DASHBOARD_STATS_CACHE_KEY, build_dashboard_stats
 
@@ -722,4 +722,141 @@ class AdminEventManagementTests(TestCase):
         delete = self.client.delete(
             f"/api/admin/events/{self.event.id}/media/{image_id}/"
         )
+        self.assertEqual(delete.status_code, 204)
+
+
+class AdminPromotionManagementTests(TestCase):
+    def setUp(self):
+        self.client = Client(enforce_csrf_checks=False)
+        self.staff = User.objects.create_user(
+            username="staff9",
+            email="staff9@korook.com",
+            password="StaffPass!234",
+            is_staff=True,
+        )
+        self.client.post(
+            "/api/admin/auth/login/",
+            {"username": "staff9", "password": "StaffPass!234"},
+            content_type="application/json",
+        )
+        self.promotion = Promotion.objects.create(
+            advertiser_name="Korook",
+            placement=Promotion.Placement.HOME_HERO,
+            title="Staging Hero",
+            subtitle="Persian community",
+            cta_text="Explore",
+            cta_link="https://korook.com",
+            is_active=False,
+            status=Promotion.Status.DRAFT,
+            display_priority=1,
+        )
+
+    def test_promotion_list_search_and_filters(self):
+        response = self.client.get("/api/admin/promotions/?search=Staging")
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(response.json()["count"], 1)
+        row = response.json()["results"][0]
+        self.assertIn("destination_type", row)
+        self.assertIn("image_url", row)
+
+        filtered = self.client.get("/api/admin/promotions/?placement=home_hero&status=draft")
+        self.assertEqual(filtered.status_code, 200)
+
+    def test_promotion_create_update_activate_deactivate(self):
+        create = self.client.post(
+            "/api/admin/promotions/",
+            {
+                "advertiser_name": "Partner Co",
+                "placement": "home_hero",
+                "title": "New Hero",
+                "subtitle": "Subtitle",
+                "cta_text": "Go",
+                "cta_link": "https://example.com",
+                "destination_type": "external_url",
+                "is_active": False,
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(create.status_code, 201)
+        promo_id = create.json()["id"]
+
+        patch = self.client.patch(
+            f"/api/admin/promotions/{promo_id}/",
+            {"title": "Updated Hero"},
+            content_type="application/json",
+        )
+        self.assertEqual(patch.status_code, 200)
+
+        activate = self.client.post(f"/api/admin/promotions/{promo_id}/activate/")
+        self.assertEqual(activate.status_code, 200)
+        self.assertTrue(activate.json()["is_active"])
+
+        deactivate = self.client.post(f"/api/admin/promotions/{promo_id}/deactivate/")
+        self.assertEqual(deactivate.status_code, 200)
+        self.assertFalse(deactivate.json()["is_active"])
+
+    def test_promotion_hero_image_and_validation(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        upload = self.client.post(
+            f"/api/admin/promotions/{self.promotion.id}/hero-image/",
+            {
+                "image": SimpleUploadedFile(
+                    "hero.jpg", b"hero-bytes", content_type="image/jpeg"
+                )
+            },
+        )
+        self.assertEqual(upload.status_code, 201)
+        self.assertIsNotNone(upload.json()["image_url"])
+
+        invalid = self.client.post(
+            f"/api/admin/promotions/{self.promotion.id}/hero-image/",
+            {
+                "image": SimpleUploadedFile(
+                    "bad.gif", b"x", content_type="image/gif"
+                )
+            },
+        )
+        self.assertEqual(invalid.status_code, 400)
+
+        delete = self.client.delete(
+            f"/api/admin/promotions/{self.promotion.id}/hero-image/"
+        )
+        self.assertEqual(delete.status_code, 204)
+
+    def test_promotion_reorder_duplicate_delete_and_schedule_validation(self):
+        second = Promotion.objects.create(
+            advertiser_name="Korook",
+            placement=Promotion.Placement.HOME_HERO,
+            title="Second Hero",
+            is_active=False,
+            status=Promotion.Status.DRAFT,
+            display_priority=2,
+        )
+
+        reorder = self.client.post(
+            "/api/admin/promotions/reorder/",
+            {"order": [second.id, self.promotion.id]},
+            content_type="application/json",
+        )
+        self.assertEqual(reorder.status_code, 200)
+
+        duplicate = self.client.post(
+            f"/api/admin/promotions/{self.promotion.id}/duplicate/"
+        )
+        self.assertEqual(duplicate.status_code, 201)
+        self.assertTrue(duplicate.json()["title"].startswith("Copy of"))
+        duplicate_id = duplicate.json()["id"]
+
+        invalid_dates = self.client.patch(
+            f"/api/admin/promotions/{self.promotion.id}/",
+            {
+                "starts_at": (timezone.now() + timezone.timedelta(days=5)).isoformat(),
+                "ends_at": (timezone.now() + timezone.timedelta(days=1)).isoformat(),
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(invalid_dates.status_code, 400)
+
+        delete = self.client.delete(f"/api/admin/promotions/{duplicate_id}/")
         self.assertEqual(delete.status_code, 204)

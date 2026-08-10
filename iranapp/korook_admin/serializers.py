@@ -522,21 +522,96 @@ class EventAdminSerializer(serializers.ModelSerializer):
         return instance
 
 
+class PromotionAdminListSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+    destination_type = serializers.SerializerMethodField()
+    destination_label = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Promotion
+        fields = [
+            "id",
+            "title",
+            "image_url",
+            "placement",
+            "advertiser_name",
+            "status",
+            "display_priority",
+            "starts_at",
+            "ends_at",
+            "destination_type",
+            "destination_label",
+            "is_active",
+            "hero_approved",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_image_url(self, obj):
+        request = self.context.get("request")
+        if obj.image and request:
+            return request.build_absolute_uri(obj.image.url)
+        return None
+
+    def get_destination_type(self, obj):
+        return _promotion_destination_type(obj)
+
+    def get_destination_label(self, obj):
+        return _promotion_destination_label(obj)
+
+
+def _promotion_destination_type(promo) -> str:
+    if promo.listing_id:
+        return "business"
+    if promo.event_id:
+        return "event"
+    if promo.cta_link:
+        return "external_url"
+    if promo.target_route:
+        return "internal"
+    return "none"
+
+
+def _promotion_destination_label(promo) -> str:
+    if promo.listing_id and promo.listing:
+        return promo.listing.title
+    if promo.event_id and promo.event:
+        return promo.event.title
+    if promo.cta_link:
+        return promo.cta_link
+    if promo.target_route:
+        suffix = f" ({promo.target_id})" if promo.target_id else ""
+        return f"{promo.target_route}{suffix}"
+    return "No destination"
+
+
 class PromotionAdminSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
+    image_filename = serializers.SerializerMethodField()
+    listing_id = serializers.IntegerField(allow_null=True, required=False)
+    event_id = serializers.IntegerField(allow_null=True, required=False)
+    listing_title = serializers.SerializerMethodField()
+    event_title = serializers.SerializerMethodField()
+    destination_type = serializers.CharField(required=False, allow_blank=True)
+    destination_label = serializers.SerializerMethodField()
+    schedule_state = serializers.SerializerMethodField()
+    analytics_available = serializers.SerializerMethodField()
 
     class Meta:
         model = Promotion
         fields = [
             "id",
             "advertiser_name",
-            "listing",
-            "event",
+            "listing_id",
+            "listing_title",
+            "event_id",
+            "event_title",
             "placement",
             "title",
             "subtitle",
             "image",
             "image_url",
+            "image_filename",
             "video_url",
             "cta_text",
             "cta_link",
@@ -553,6 +628,10 @@ class PromotionAdminSerializer(serializers.ModelSerializer):
             "admin_note",
             "billing_reference",
             "campaign_id",
+            "destination_type",
+            "destination_label",
+            "schedule_state",
+            "analytics_available",
             "created_at",
             "updated_at",
         ]
@@ -563,6 +642,118 @@ class PromotionAdminSerializer(serializers.ModelSerializer):
         if obj.image and request:
             return request.build_absolute_uri(obj.image.url)
         return None
+
+    def get_image_filename(self, obj):
+        if not obj.image:
+            return ""
+        import os
+
+        return os.path.basename(obj.image.name)
+
+    def get_listing_title(self, obj):
+        return obj.listing.title if obj.listing_id and obj.listing else None
+
+    def get_event_title(self, obj):
+        return obj.event.title if obj.event_id and obj.event else None
+
+    def get_destination_label(self, obj):
+        return _promotion_destination_label(obj)
+
+    def get_schedule_state(self, obj):
+        return obj.status
+
+    def get_analytics_available(self, obj):
+        return False
+
+    def validate(self, attrs):
+        starts = attrs.get("starts_at")
+        ends = attrs.get("ends_at")
+        if self.instance:
+            if starts is None:
+                starts = self.instance.starts_at
+            if ends is None:
+                ends = self.instance.ends_at
+        if starts and ends and ends < starts:
+            raise serializers.ValidationError(
+                {"ends_at": ["End date must be after start date."]}
+            )
+        cta_link = attrs.get("cta_link")
+        if cta_link is None and self.instance:
+            cta_link = self.instance.cta_link
+        if cta_link and not str(cta_link).startswith(("http://", "https://")):
+            raise serializers.ValidationError(
+                {"cta_link": ["Enter a valid URL starting with http:// or https://"]}
+            )
+        return attrs
+
+    def _apply_destination_type(self, instance, destination_type):
+        if not destination_type:
+            return
+        if destination_type == "business":
+            instance.cta_link = ""
+            instance.target_route = ""
+            instance.target_id = ""
+            instance.event = None
+        elif destination_type == "event":
+            instance.cta_link = ""
+            instance.target_route = ""
+            instance.target_id = ""
+            instance.listing = None
+        elif destination_type == "external_url":
+            instance.listing = None
+            instance.event = None
+            instance.target_route = ""
+            instance.target_id = ""
+        elif destination_type == "internal":
+            instance.listing = None
+            instance.event = None
+            instance.cta_link = ""
+        elif destination_type == "none":
+            instance.listing = None
+            instance.event = None
+            instance.cta_link = ""
+            instance.target_route = ""
+            instance.target_id = ""
+
+    def create(self, validated_data):
+        destination_type = validated_data.pop("destination_type", None)
+        listing_id = validated_data.pop("listing_id", None)
+        event_id = validated_data.pop("event_id", None)
+        instance = super().create(validated_data)
+        if listing_id is not None:
+            from listings.models import Listing
+
+            instance.listing = Listing.objects.filter(pk=listing_id).first()
+        if event_id is not None:
+            from korook_platform.models import Event
+
+            instance.event = Event.objects.filter(pk=event_id).first()
+        self._apply_destination_type(instance, destination_type)
+        instance.save()
+        return instance
+
+    def update(self, instance, validated_data):
+        destination_type = validated_data.pop("destination_type", None)
+        listing_id = validated_data.pop("listing_id", None)
+        event_id = validated_data.pop("event_id", None)
+        instance = super().update(instance, validated_data)
+        if listing_id is not None:
+            from listings.models import Listing
+
+            instance.listing = Listing.objects.filter(pk=listing_id).first() if listing_id else None
+        if event_id is not None:
+            from korook_platform.models import Event
+
+            instance.event = Event.objects.filter(pk=event_id).first() if event_id else None
+        if destination_type is not None:
+            self._apply_destination_type(instance, destination_type)
+        instance.save()
+        return instance
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["destination_type"] = _promotion_destination_type(instance)
+        return data
 
 
 class BusinessClaimAdminSerializer(serializers.ModelSerializer):

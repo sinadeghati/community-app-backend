@@ -536,3 +536,38 @@ button.danger, .button-link.danger {
   background: #dc2626;
   color: white;
 }
+.drag-handle { cursor: grab; user-select: none; color: #5b6b82; }
+.hero-preview-wide { max-height: 280px; }
+.mobile-hero-preview { max-width: 360px; }
+.mobile-hero-frame {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: #0b1f3a;
+  min-height: 220px;
+}
+.mobile-hero-image {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  display: block;
+}
+.mobile-hero-overlay {
+  padding: 1rem;
+  color: white;
+  background: linear-gradient(transparent, rgba(11, 31, 58, 0.92));
+  margin-top: -4rem;
+  position: relative;
+}
+.mobile-hero-overlay h3 { margin: 0.35rem 0; color: white; }
+.mobile-hero-overlay p { margin: 0; color: rgba(255,255,255,0.85); }
+.hero-cta-button {
+  margin-top: 0.75rem;
+  background: var(--teal);
+  color: white;
+  border: none;
+  border-radius: 999px;
+  padding: 0.45rem 1rem;
+}
+.preview-disclaimer { font-size: 0.85rem; margin-bottom: 0.75rem; }

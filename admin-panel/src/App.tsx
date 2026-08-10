@@ -10,7 +10,9 @@ import BusinessDetailPage from "./pages/businesses/BusinessDetailPage";
 import EventsListPage from "./pages/events/EventsListPage";
 import EventCreatePage from "./pages/events/EventCreatePage";
 import EventDetailPage from "./pages/events/EventDetailPage";
-import PromotionsPage from "./pages/PromotionsPage";
+import PromotionsListPage from "./pages/promotions/PromotionsListPage";
+import PromotionCreatePage from "./pages/promotions/PromotionCreatePage";
+import PromotionDetailPage from "./pages/promotions/PromotionDetailPage";
 import ClaimsPage from "./pages/ClaimsPage";
 import ReportsPage from "./pages/ReportsPage";
 
@@ -153,7 +155,9 @@ export default function App() {
               <Route path="/events/new" element={<EventCreatePage />} />
               <Route path="/events/:id" element={<EventDetailPage />} />
               <Route path="/events" element={<EventsListPage />} />
-              <Route path="/promotions" element={<PromotionsPage />} />
+              <Route path="/promotions/new" element={<PromotionCreatePage />} />
+              <Route path="/promotions/:id" element={<PromotionDetailPage />} />
+              <Route path="/promotions" element={<PromotionsListPage />} />
               <Route path="/claims" element={<ClaimsPage />} />
               <Route path="/reports" element={<ReportsPage />} />
             </Routes>
