@@ -118,8 +118,8 @@ export default function BusinessDetailPage() {
   const handleSave = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!form || saving) return;
-    if (!form.title.trim() || !form.city.trim() || !form.state.trim() || !form.contact_info.trim()) {
-      setError("Title, city, state, and contact email/info are required.");
+    if (!form.business_name.trim() || !form.city.trim() || !form.state.trim() || !form.contact_info.trim()) {
+      setError("Business name, city, state, and contact email/info are required.");
       return;
     }
     setSaving(true);
@@ -207,13 +207,19 @@ export default function BusinessDetailPage() {
         <h2>General information</h2>
         <form onSubmit={handleSave}>
           <div className="form-grid">
-            <label className="form-field">
-              <span>Title</span>
-              <input value={form.title} onChange={(e) => updateField("title", e.target.value)} />
-            </label>
-            <label className="form-field">
-              <span>Business name</span>
-              <input value={form.business_name} onChange={(e) => updateField("business_name", e.target.value)} />
+            <label className="form-field span-2">
+              <span>Business name *</span>
+              <input
+                value={form.business_name}
+                onChange={(e) => updateField("business_name", e.target.value)}
+                required
+              />
+              {fieldErrors.business_name?.[0] ? (
+                <small className="field-error">{fieldErrors.business_name[0]}</small>
+              ) : null}
+              {fieldErrors.title?.[0] ? (
+                <small className="field-error">{fieldErrors.title[0]}</small>
+              ) : null}
             </label>
             <label className="form-field span-2">
               <span>Description</span>
@@ -274,7 +280,7 @@ export default function BusinessDetailPage() {
 
       <section className="panel" id="status">
         <h2>Status</h2>
-        <BusinessFormFields values={form} errors={fieldErrors} onChange={updateField} />
+        <BusinessFormFields values={form} errors={fieldErrors} onChange={updateField} hideBusinessName />
         <section className="actions-panel inline-actions">
           <div className="row">
             {business.status !== "published" ? (

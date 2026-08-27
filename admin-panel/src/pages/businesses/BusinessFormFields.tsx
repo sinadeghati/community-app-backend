@@ -12,6 +12,7 @@ type Props = {
   errors: FieldErrors;
   onChange: (key: keyof BusinessFormValues, value: string | boolean) => void;
   includeOwner?: boolean;
+  hideBusinessName?: boolean;
 };
 
 export default function BusinessFormFields({
@@ -19,31 +20,26 @@ export default function BusinessFormFields({
   errors,
   onChange,
   includeOwner = false,
+  hideBusinessName = false,
 }: Props) {
   return (
     <div className="form-grid">
-      <label className="form-field">
-        <span>Title *</span>
-        <input
-          value={values.title}
-          onChange={(e) => onChange("title", e.target.value)}
-          required
-        />
-        {fieldError(errors, "title") ? (
-          <small className="field-error">{fieldError(errors, "title")}</small>
-        ) : null}
-      </label>
-
-      <label className="form-field">
-        <span>Business name</span>
-        <input
-          value={values.business_name}
-          onChange={(e) => onChange("business_name", e.target.value)}
-        />
-        {fieldError(errors, "business_name") ? (
-          <small className="field-error">{fieldError(errors, "business_name")}</small>
-        ) : null}
-      </label>
+      {hideBusinessName ? null : (
+        <label className="form-field">
+          <span>Business name *</span>
+          <input
+            value={values.business_name}
+            onChange={(e) => onChange("business_name", e.target.value)}
+            required
+          />
+          {fieldError(errors, "business_name") ? (
+            <small className="field-error">{fieldError(errors, "business_name")}</small>
+          ) : null}
+          {fieldError(errors, "title") ? (
+            <small className="field-error">{fieldError(errors, "title")}</small>
+          ) : null}
+        </label>
+      )}
 
       <CategorySelect
         value={values.category}

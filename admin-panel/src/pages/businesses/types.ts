@@ -77,7 +77,6 @@ export type BusinessDetail = {
 };
 
 export type BusinessFormValues = {
-  title: string;
   business_name: string;
   description: string;
   about: string;
@@ -130,7 +129,6 @@ function toDateTimeLocal(value: string | null): string {
 
 export function emptyBusinessForm(): BusinessFormValues {
   return {
-    title: "",
     business_name: "",
     description: "",
     about: "",
@@ -160,8 +158,7 @@ export function emptyBusinessForm(): BusinessFormValues {
 
 export function businessToFormValues(business: BusinessDetail): BusinessFormValues {
   return {
-    title: business.title || "",
-    business_name: business.business_name || "",
+    business_name: business.business_name?.trim() || business.title?.trim() || "",
     description: business.description || "",
     about: business.about || "",
     category: business.category || "",
@@ -189,9 +186,10 @@ export function businessToFormValues(business: BusinessDetail): BusinessFormValu
 }
 
 export function formValuesToPayload(values: BusinessFormValues): Record<string, unknown> {
+  const name = values.business_name.trim();
   const payload: Record<string, unknown> = {
-    title: values.title.trim(),
-    business_name: values.business_name.trim() || values.title.trim(),
+    title: name,
+    business_name: name,
     description: values.description.trim() || null,
     about: values.about.trim() || null,
     category: values.category.trim(),

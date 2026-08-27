@@ -40,8 +40,8 @@ export default function BusinessCreatePage() {
     event.preventDefault();
     if (saving) return;
 
-    if (!form.title.trim() || !form.city.trim() || !form.state.trim() || !form.contact_info.trim()) {
-      setError("Title, city, state, and contact email/info are required.");
+    if (!form.business_name.trim() || !form.city.trim() || !form.state.trim() || !form.contact_info.trim()) {
+      setError("Business name, city, state, and contact email/info are required.");
       return;
     }
     if (!form.owner_id.trim()) {
