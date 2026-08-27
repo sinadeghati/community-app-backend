@@ -4,6 +4,7 @@ import { ApiError, apiFetch, type Claim, type Paginated } from "../../api";
 import { StatusBanner } from "../adminShared";
 import BusinessFormFields from "./BusinessFormFields";
 import BusinessMediaSection from "./BusinessMediaSection";
+import CategorySelect from "./CategorySelect";
 import {
   businessToFormValues,
   formValuesToPayload,
@@ -242,7 +243,11 @@ export default function BusinessDetailPage() {
 
       <section className="panel" id="categories">
         <h2>Categories</h2>
-        <label className="form-field"><span>Category</span><input value={form.category} onChange={(e) => updateField("category", e.target.value)} /></label>
+        <CategorySelect
+          value={form.category}
+          onChange={(value) => updateField("category", value)}
+          error={fieldErrors.category?.[0]}
+        />
       </section>
 
       <section className="panel" id="contact">

@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.viewsets import ModelViewSet
 from rest_framework import viewsets
 
+from .categories import BUSINESS_CATEGORIES
 from .models import Listing
 from .serializers import ListingSerializer, ListingImageSerializer
 
@@ -34,7 +35,11 @@ class ListingViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
-   
+    @action(detail=False, methods=["get"], url_path="categories")
+    def categories(self, request):
+        return Response(
+            [{"value": value, "label": value} for value in BUSINESS_CATEGORIES]
+        )
 
     @action(
         detail=True,

@@ -100,3 +100,13 @@ class MyListingOwnershipTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.listing_a.refresh_from_db()
         self.assertEqual(self.listing_a.description, "Updated description")
+
+
+class ListingCategoriesTests(TestCase):
+    def test_categories_endpoint_returns_canonical_list(self):
+        response = APIClient().get("/api/listings/categories/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        values = [item["value"] for item in response.data]
+        self.assertIn("Food", values)
+        self.assertIn("Real Estate", values)
+        self.assertEqual(values[0], "Food")

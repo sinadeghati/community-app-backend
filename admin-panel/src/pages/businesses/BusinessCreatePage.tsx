@@ -2,7 +2,12 @@ import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { ApiError, apiFetch } from "../../api";
 import { StatusBanner } from "../adminShared";
+import BusinessCreateMediaSection, {
+  emptyPendingBusinessMedia,
+  type PendingBusinessMedia,
+} from "./BusinessCreateMediaSection";
 import BusinessFormFields from "./BusinessFormFields";
+import { uploadPendingBusinessMedia } from "./businessMediaUpload";
 import {
   emptyBusinessForm,
   formValuesToPayload,
@@ -13,7 +18,11 @@ import {
 export default function BusinessCreatePage() {
   const navigate = useNavigate();
   const [form, setForm] = useState<BusinessFormValues>(emptyBusinessForm);
+  const [pendingMedia, setPendingMedia] = useState<PendingBusinessMedia>(
+    emptyPendingBusinessMedia()
+  );
   const [saving, setSaving] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
 
@@ -44,6 +53,7 @@ export default function BusinessCreatePage() {
     setSaving(true);
     setError("");
     setFieldErrors({});
+    setUploadProgress(null);
     try {
       const created = await apiFetch<BusinessDetail>("/admin/businesses/", {
         method: "POST",
@@ -52,9 +62,17 @@ export default function BusinessCreatePage() {
           owner_id: Number(form.owner_id),
         }),
       });
+
+      const hasMedia =
+        pendingMedia.logo || pendingMedia.cover || pendingMedia.gallery.length > 0;
+      if (hasMedia) {
+        setUploadProgress(0);
+        await uploadPendingBusinessMedia(created.id, pendingMedia, setUploadProgress);
+      }
+
       navigate(`/businesses/${created.id}`, {
         replace: true,
-        state: { message: "Business created." },
+        state: { message: hasMedia ? "Business created and media uploaded." : "Business created." },
       });
     } catch (e) {
       if (e instanceof ApiError) {
@@ -65,6 +83,7 @@ export default function BusinessCreatePage() {
       }
     } finally {
       setSaving(false);
+      setUploadProgress(null);
     }
   };
 
@@ -74,33 +93,48 @@ export default function BusinessCreatePage() {
         <div>
           <Link to="/businesses" className="back-link">← Back to businesses</Link>
           <h1>Create business</h1>
-          <p className="muted">Create a business using the existing admin API.</p>
+          <p className="muted">Enter business details, category, and media for Korook listings.</p>
         </div>
       </div>
 
       <StatusBanner error={error} message="" />
 
-      <section className="panel">
-        <p className="muted phase-note">
-          Image upload is not included in this phase and will be added in Phase 3.
-        </p>
-        <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit}>
+        <section className="panel">
           <BusinessFormFields
             values={form}
             errors={fieldErrors}
             onChange={updateField}
             includeOwner
           />
+        </section>
+
+        <BusinessCreateMediaSection media={pendingMedia} onChange={setPendingMedia} />
+
+        {uploadProgress !== null ? (
+          <section className="panel">
+            <div className="upload-progress">
+              <div className="upload-progress-bar" style={{ width: `${uploadProgress}%` }} />
+              <span>Uploading media… {uploadProgress}%</span>
+            </div>
+          </section>
+        ) : null}
+
+        <section className="panel">
           <div className="form-actions">
             <button type="submit" disabled={saving}>
-              {saving ? "Creating…" : "Create business"}
+              {saving
+                ? uploadProgress !== null
+                  ? "Uploading media…"
+                  : "Creating…"
+                : "Create business"}
             </button>
             <Link to="/businesses" className="button-link secondary">
               Cancel
             </Link>
           </div>
-        </form>
-      </section>
+        </section>
+      </form>
     </div>
   );
 }

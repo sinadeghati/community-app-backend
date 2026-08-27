@@ -1,4 +1,5 @@
 import type { BusinessFormValues } from "./types";
+import CategorySelect from "./CategorySelect";
 
 type FieldErrors = Record<string, string[]>;
 
@@ -44,13 +45,11 @@ export default function BusinessFormFields({
         ) : null}
       </label>
 
-      <label className="form-field">
-        <span>Category</span>
-        <input
-          value={values.category}
-          onChange={(e) => onChange("category", e.target.value)}
-        />
-      </label>
+      <CategorySelect
+        value={values.category}
+        onChange={(value) => onChange("category", value)}
+        error={fieldError(errors, "category")}
+      />
 
       <label className="form-field">
         <span>Status</span>
