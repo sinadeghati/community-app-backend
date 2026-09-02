@@ -24,6 +24,8 @@ urlpatterns = [
 
     path('api/accounts/', include('accounts.urls')),
 
+    path('api/geocode/', include('geocode.urls')),
+
     path('api/admin/', include('korook_admin.urls')),
 
     path('api/', include('korook_platform.urls')),

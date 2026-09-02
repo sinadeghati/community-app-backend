@@ -89,6 +89,7 @@ INSTALLED_APPS = [
     'accounts',
     'korook_platform',
     'korook_admin',
+    'geocode',
 ]
 
 MIDDLEWARE = [
@@ -230,6 +231,21 @@ FRONTEND_PASSWORD_RESET_URL = os.environ.get(
 FRONTEND_EMAIL_VERIFICATION_URL = os.environ.get(
     'FRONTEND_EMAIL_VERIFICATION_URL',
     'https://korook.com/verify-email',
+)
+
+# Geocoding proxy (Nominatim / OpenStreetMap)
+NOMINATIM_BASE_URL = os.environ.get(
+    'NOMINATIM_BASE_URL',
+    'https://nominatim.openstreetmap.org',
+)
+NOMINATIM_USER_AGENT = os.environ.get(
+    'NOMINATIM_USER_AGENT',
+    'KorookBackend/1.0 (https://korook.com; contact@korook.com)',
+)
+GEOCODE_CACHE_SECONDS = int(os.environ.get('GEOCODE_CACHE_SECONDS', '3600'))
+GEOCODE_RATE_LIMIT_PER_MINUTE = int(os.environ.get('GEOCODE_RATE_LIMIT_PER_MINUTE', '30'))
+GEOCODE_UPSTREAM_MIN_INTERVAL_SECONDS = float(
+    os.environ.get('GEOCODE_UPSTREAM_MIN_INTERVAL_SECONDS', '1')
 )
 
 MEDIA_URL = '/media/'
