@@ -218,3 +218,38 @@ def search_nominatim(
 
     cache.set(cache_key, payload, get_cache_seconds())
     return payload
+
+
+def forward_geocode_address_line(
+    *,
+    address: str,
+    city: str,
+    state: str,
+    client_ip: str = "",
+) -> tuple[float, float] | None:
+    """Return (lat, lon) for a US street address or None when no match."""
+    parts = [part.strip() for part in (address, city, state) if part and part.strip()]
+    if len(parts) < 2:
+        return None
+    query = ", ".join(parts)
+    results = search_nominatim(
+        {
+            "q": query,
+            "limit": "1",
+            "countrycodes": "us",
+            "format": "json",
+            "addressdetails": "1",
+        },
+        client_ip=client_ip,
+    )
+    if not results:
+        return None
+    first = results[0]
+    try:
+        lat = float(first["lat"])
+        lon = float(first["lon"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if lat == 0.0 and lon == 0.0:
+        return None
+    return lat, lon

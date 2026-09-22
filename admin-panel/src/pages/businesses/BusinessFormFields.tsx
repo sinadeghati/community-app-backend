@@ -1,5 +1,6 @@
 import type { BusinessFormValues } from "./types";
 import CategorySelect from "./CategorySelect";
+import OwnerUserSelect from "./OwnerUserSelect";
 
 type FieldErrors = Record<string, string[]>;
 
@@ -13,6 +14,10 @@ type Props = {
   onChange: (key: keyof BusinessFormValues, value: string | boolean) => void;
   includeOwner?: boolean;
   hideBusinessName?: boolean;
+  hideOwner?: boolean;
+  onGeocodeAddress?: () => void;
+  geocoding?: boolean;
+  geocodeError?: string;
 };
 
 export default function BusinessFormFields({
@@ -21,6 +26,10 @@ export default function BusinessFormFields({
   onChange,
   includeOwner = false,
   hideBusinessName = false,
+  hideOwner = false,
+  onGeocodeAddress,
+  geocoding = false,
+  geocodeError = "",
 }: Props) {
   return (
     <div className="form-grid">
@@ -59,27 +68,18 @@ export default function BusinessFormFields({
         </select>
       </label>
 
-      {includeOwner ? (
-        <label className="form-field">
-          <span>Owner user ID *</span>
-          <input
-            value={values.owner_id}
-            onChange={(e) => onChange("owner_id", e.target.value)}
-            required
-          />
-          {fieldError(errors, "owner_id") ? (
-            <small className="field-error">{fieldError(errors, "owner_id")}</small>
-          ) : null}
-        </label>
+      {hideOwner ? null : includeOwner ? (
+        <OwnerUserSelect
+          value={values.owner_id || "unclaimed"}
+          onChange={(ownerId) => onChange("owner_id", ownerId)}
+          error={fieldError(errors, "owner_id")}
+        />
       ) : (
-        <label className="form-field">
-          <span>Owner user ID</span>
-          <input
-            value={values.owner_id}
-            onChange={(e) => onChange("owner_id", e.target.value)}
-            placeholder="Leave blank to keep current owner"
-          />
-        </label>
+        <OwnerUserSelect
+          value={values.owner_id || "unclaimed"}
+          onChange={(ownerId) => onChange("owner_id", ownerId)}
+          error={fieldError(errors, "owner_id")}
+        />
       )}
 
       <label className="form-field span-2">
@@ -101,11 +101,15 @@ export default function BusinessFormFields({
       </label>
 
       <label className="form-field span-2">
-        <span>Address</span>
+        <span>Street address (include ZIP) *</span>
         <input
           value={values.address}
           onChange={(e) => onChange("address", e.target.value)}
+          required
         />
+        {fieldError(errors, "address") ? (
+          <small className="field-error">{fieldError(errors, "address")}</small>
+        ) : null}
       </label>
 
       <label className="form-field">
@@ -132,21 +136,40 @@ export default function BusinessFormFields({
         ) : null}
       </label>
 
-      <label className="form-field">
-        <span>Latitude</span>
-        <input
-          value={values.latitude}
-          onChange={(e) => onChange("latitude", e.target.value)}
-        />
-      </label>
-
-      <label className="form-field">
-        <span>Longitude</span>
-        <input
-          value={values.longitude}
-          onChange={(e) => onChange("longitude", e.target.value)}
-        />
-      </label>
+      <div className="form-field span-2 geocode-row">
+        <div className="geocode-fields">
+          <label className="form-field">
+            <span>Latitude</span>
+            <input
+              value={values.latitude}
+              onChange={(e) => onChange("latitude", e.target.value)}
+              placeholder="Optional — use geocode"
+            />
+          </label>
+          <label className="form-field">
+            <span>Longitude</span>
+            <input
+              value={values.longitude}
+              onChange={(e) => onChange("longitude", e.target.value)}
+              placeholder="Optional — use geocode"
+            />
+          </label>
+        </div>
+        {onGeocodeAddress ? (
+          <button
+            type="button"
+            className="button-link secondary geocode-button"
+            onClick={onGeocodeAddress}
+            disabled={geocoding}
+          >
+            {geocoding ? "Geocoding…" : "Geocode address"}
+          </button>
+        ) : null}
+        {geocodeError ? <small className="field-error">{geocodeError}</small> : null}
+        {fieldError(errors, "latitude") ? (
+          <small className="field-error">{fieldError(errors, "latitude")}</small>
+        ) : null}
+      </div>
 
       <label className="form-field">
         <span>Phone</span>
@@ -157,11 +180,11 @@ export default function BusinessFormFields({
       </label>
 
       <label className="form-field">
-        <span>Contact email / info *</span>
+        <span>Contact email</span>
         <input
           value={values.contact_info}
           onChange={(e) => onChange("contact_info", e.target.value)}
-          required
+          placeholder="Optional"
         />
         {fieldError(errors, "contact_info") ? (
           <small className="field-error">{fieldError(errors, "contact_info")}</small>

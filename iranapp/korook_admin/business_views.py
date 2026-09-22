@@ -5,9 +5,22 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from geocode.nominatim import (
+    GeocodeRateLimitError,
+    GeocodeUpstreamError,
+    forward_geocode_address_line,
+)
 from korook_admin.audit import log_admin_action
 from listings.models import Listing, ListingImage
+from listings.unclaimed import get_unclaimed_listing_user
 
+from .business_admin import (
+    apply_admin_create_defaults,
+    invalid_zero_coordinates,
+    resolve_coordinates_for_admin,
+    validate_admin_business_required_fields,
+    _client_ip,
+)
 from .mixins import AdminAPIMixin
 from .pagination import AdminPageNumberPagination
 from .serializers import (
@@ -72,20 +85,31 @@ class AdminBusinessListCreateView(AdminAPIMixin, APIView):
         )
 
     def post(self, request):
-        data = request.data.copy()
+        data = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+        required_error = validate_admin_business_required_fields(data)
+        if required_error:
+            return required_error
+
         owner_id = data.get("owner_id") or data.get("user_id")
-        if not owner_id:
-            return Response(
-                {"detail": "owner_id or user_id is required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        user = User.objects.filter(pk=owner_id).first()
-        if not user:
-            return Response({"detail": "User not found."}, status=status.HTTP_400_BAD_REQUEST)
+        owner_user = None
+        if owner_id not in (None, ""):
+            owner_user = User.objects.filter(pk=owner_id).first()
+            if not owner_user:
+                return Response({"detail": "User not found."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if "contact_info" not in data or data.get("contact_info") is None:
+            data["contact_info"] = ""
+
+        coord_error = resolve_coordinates_for_admin(data, request)
+        if coord_error:
+            return coord_error
+
+        listing_user = owner_user or get_unclaimed_listing_user()
         serializer = ListingAdminSerializer(data=data, context={"request": request})
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        listing = serializer.save(user=user, owner=user)
+        listing = serializer.save(user=listing_user, owner=owner_user)
+        apply_admin_create_defaults(listing)
         log_admin_action(
             actor=request.user,
             action_type="business.create",
@@ -118,10 +142,25 @@ class AdminBusinessDetailView(AdminAPIMixin, APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         listing = serializer.save()
         if "owner_id" in request.data:
-            owner = User.objects.filter(pk=request.data["owner_id"]).first()
-            if owner:
+            owner_raw = request.data.get("owner_id")
+            if owner_raw in (None, ""):
+                listing.owner = None
+                listing.save(update_fields=["owner", "updated_at"])
+            else:
+                owner = User.objects.filter(pk=owner_raw).first()
+                if not owner:
+                    return Response(
+                        {"detail": "User not found."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
                 listing.owner = owner
                 listing.save(update_fields=["owner", "updated_at"])
+
+        if invalid_zero_coordinates(listing.latitude, listing.longitude):
+            return Response(
+                {"detail": "Latitude and longitude cannot both be 0."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         log_admin_action(
             actor=request.user,
             action_type="business.update",
@@ -190,6 +229,38 @@ class AdminBusinessActionView(AdminAPIMixin, APIView):
             summary=f"Business action {action} on {listing.title}",
         )
         return Response(ListingAdminSerializer(listing, context={"request": request}).data)
+
+
+class AdminBusinessGeocodeView(AdminAPIMixin, APIView):
+    """Resolve latitude/longitude for an admin-entered US address."""
+
+    def post(self, request):
+        address = (request.data.get("address") or "").strip()
+        city = (request.data.get("city") or "").strip()
+        state = (request.data.get("state") or "").strip()
+        if not address or not city or not state:
+            return Response(
+                {"detail": "address, city, and state are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            coords = forward_geocode_address_line(
+                address=address,
+                city=city,
+                state=state,
+                client_ip=_client_ip(request),
+            )
+        except GeocodeRateLimitError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        except GeocodeUpstreamError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        if not coords:
+            return Response(
+                {"detail": "Could not geocode this address. Check the street, city, and state."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        latitude, longitude = coords
+        return Response({"latitude": latitude, "longitude": longitude})
 
 
 class AdminPremiumListingsView(AdminAPIMixin, APIView):

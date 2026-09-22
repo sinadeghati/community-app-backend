@@ -209,6 +209,7 @@ class ListingAdminSerializer(serializers.ModelSerializer):
     images = serializers.SerializerMethodField()
     owner_id = serializers.IntegerField(source="owner.id", read_only=True, allow_null=True)
     user_id = serializers.IntegerField(source="user.id", read_only=True)
+    is_unclaimed = serializers.SerializerMethodField()
 
     class Meta:
         model = Listing
@@ -216,6 +217,7 @@ class ListingAdminSerializer(serializers.ModelSerializer):
             "id",
             "user_id",
             "owner_id",
+            "is_unclaimed",
             "title",
             "business_name",
             "city",
@@ -246,6 +248,25 @@ class ListingAdminSerializer(serializers.ModelSerializer):
             "images",
         ]
         read_only_fields = ["created_at", "updated_at", "verified_at"]
+        extra_kwargs = {
+            "contact_info": {"required": False, "allow_blank": True},
+        }
+
+    def get_is_unclaimed(self, obj):
+        return obj.owner_id is None
+
+    def validate(self, attrs):
+        latitude = attrs.get("latitude", getattr(self.instance, "latitude", None))
+        longitude = attrs.get("longitude", getattr(self.instance, "longitude", None))
+        if latitude is not None and longitude is not None:
+            try:
+                if float(latitude) == 0.0 and float(longitude) == 0.0:
+                    raise serializers.ValidationError(
+                        "Latitude and longitude cannot both be 0."
+                    )
+            except (TypeError, ValueError):
+                pass
+        return attrs
 
     def get_images(self, obj):
         images = sort_listing_images(obj.images.all(), obj)

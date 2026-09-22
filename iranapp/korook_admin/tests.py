@@ -276,6 +276,7 @@ class AdminBusinessCrudTests(TestCase):
             {
                 "title": "New Shop",
                 "business_name": "New Shop",
+                "address": "500 Main St",
                 "city": "Irvine",
                 "state": "CA",
                 "contact_info": "new@shop.com",
@@ -289,19 +290,81 @@ class AdminBusinessCrudTests(TestCase):
         self.assertEqual(body["title"], "New Shop")
         self.assertEqual(body["owner_id"], self.owner.id)
 
-    def test_create_business_requires_owner(self):
+    def test_create_unclaimed_business(self):
         response = self.client.post(
             "/api/admin/businesses/",
             {
-                "title": "No Owner Shop",
+                "title": "Unclaimed Shop",
+                "business_name": "Unclaimed Shop",
+                "category": "Food",
+                "address": "123 Main St, 92602",
                 "city": "Irvine",
                 "state": "CA",
-                "contact_info": "noowner@shop.com",
+                "owner_id": None,
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        body = response.json()
+        self.assertIsNone(body["owner_id"])
+        self.assertTrue(body["is_unclaimed"])
+        self.assertFalse(body["verified_badge"])
+        self.assertFalse(body["is_featured"])
+
+    def test_create_business_rejects_zero_coordinates(self):
+        response = self.client.post(
+            "/api/admin/businesses/",
+            {
+                "title": "Bad Coords Shop",
+                "business_name": "Bad Coords Shop",
+                "category": "Food",
+                "address": "1 Test Way",
+                "city": "Irvine",
+                "state": "CA",
+                "latitude": 0,
+                "longitude": 0,
+                "owner_id": self.owner.id,
             },
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 400)
-        self.assertIn("owner_id", response.json()["detail"].lower())
+
+    def test_admin_business_geocode_endpoint(self):
+        response = self.client.post(
+            "/api/admin/businesses/geocode/",
+            {"address": "", "city": "Irvine", "state": "CA"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_claim_approve_assigns_owner_without_duplicating_listing(self):
+        unclaimed = Listing.objects.create(
+            user=self.owner,
+            owner=None,
+            title="Claim Me",
+            business_name="Claim Me",
+            city="LA",
+            state="CA",
+            contact_info="",
+            category="Food",
+            address="100 Claim St",
+            status=Listing.Status.DRAFT,
+        )
+        requester = User.objects.create_user(
+            username="claim_requester",
+            email="claim_requester@korook.com",
+            password="ClaimPass!234",
+        )
+        claim = BusinessClaim.objects.create(
+            listing=unclaimed,
+            requester=requester,
+            status=BusinessClaim.Status.PENDING,
+        )
+        approve = self.client.post(f"/api/admin/claims/{claim.id}/approve/")
+        self.assertEqual(approve.status_code, 200)
+        unclaimed.refresh_from_db()
+        self.assertEqual(unclaimed.owner_id, requester.id)
+        self.assertEqual(Listing.objects.filter(title="Claim Me").count(), 1)
 
     def test_patch_business(self):
         response = self.client.patch(

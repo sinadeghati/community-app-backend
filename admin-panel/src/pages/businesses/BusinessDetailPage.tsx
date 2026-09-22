@@ -5,9 +5,12 @@ import { StatusBanner } from "../adminShared";
 import BusinessFormFields from "./BusinessFormFields";
 import BusinessMediaSection from "./BusinessMediaSection";
 import CategorySelect from "./CategorySelect";
+import OwnerUserSelect from "./OwnerUserSelect";
+import { geocodeBusinessAddress } from "./geocodeBusinessAddress";
 import {
   businessToFormValues,
   formValuesToPayload,
+  validateBusinessFormRequired,
   type BusinessDetail,
   type BusinessFormValues,
 } from "./types";
@@ -40,6 +43,8 @@ export default function BusinessDetailPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  const [geocoding, setGeocoding] = useState(false);
+  const [geocodeError, setGeocodeError] = useState("");
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
   const [deleteConfirmName, setDeleteConfirmName] = useState("");
 
@@ -118,8 +123,9 @@ export default function BusinessDetailPage() {
   const handleSave = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!form || saving) return;
-    if (!form.business_name.trim() || !form.city.trim() || !form.state.trim() || !form.contact_info.trim()) {
-      setError("Business name, city, state, and contact email/info are required.");
+    const requiredMessage = validateBusinessFormRequired(form);
+    if (requiredMessage) {
+      setError(requiredMessage);
       return;
     }
     setSaving(true);
@@ -176,6 +182,87 @@ export default function BusinessDetailPage() {
 
   const displayName = business.business_name || business.title;
 
+  const handleGeocode = async () => {
+    if (!form) return;
+    const requiredMessage = validateBusinessFormRequired(form);
+    if (requiredMessage) {
+      setGeocodeError(requiredMessage);
+      return;
+    }
+    setGeocoding(true);
+    setGeocodeError("");
+    try {
+      const result = await geocodeBusinessAddress({
+        address: form.address,
+        city: form.city,
+        state: form.state,
+      });
+      setForm((current) =>
+        current
+          ? {
+              ...current,
+              latitude: String(result.latitude),
+              longitude: String(result.longitude),
+            }
+          : current
+      );
+      setMessage("Address geocoded. Save location changes to persist coordinates.");
+    } catch (e) {
+      setGeocodeError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGeocoding(false);
+    }
+  };
+
+  const saveLocation = async () => {
+    if (!form) return;
+    const requiredMessage = validateBusinessFormRequired(form);
+    if (requiredMessage) {
+      setError(requiredMessage);
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const updated = await apiFetch<BusinessDetail>(`/admin/businesses/${businessId}/`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          address: form.address.trim(),
+          city: form.city.trim(),
+          state: form.state.trim(),
+          latitude: form.latitude.trim() ? Number(form.latitude) : null,
+          longitude: form.longitude.trim() ? Number(form.longitude) : null,
+        }),
+      });
+      setBusiness(updated);
+      setForm(businessToFormValues(updated));
+      setMessage("Location saved.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveOwner = async () => {
+    if (!form) return;
+    setSaving(true);
+    setError("");
+    try {
+      const updated = await apiFetch<BusinessDetail>(`/admin/businesses/${businessId}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ owner_id: formValuesToPayload(form).owner_id }),
+      });
+      setBusiness(updated);
+      setForm(businessToFormValues(updated));
+      setMessage("Owner assignment saved.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="business-detail-layout">
       <div className="page-header">
@@ -186,6 +273,7 @@ export default function BusinessDetailPage() {
             <span className="badge">ID {business.id}</span>
             <span className="badge">{business.status}</span>
             {business.is_featured ? <span className="badge accent">Featured</span> : null}
+            {business.is_unclaimed ? <span className="badge">Unclaimed</span> : null}
             {business.verified_badge ? <span className="badge accent">Verified</span> : null}
           </div>
         </div>
@@ -239,11 +327,44 @@ export default function BusinessDetailPage() {
       <section className="panel" id="location">
         <h2>Location</h2>
         <div className="form-grid">
-          <label className="form-field span-2"><span>Address</span><input value={form.address} onChange={(e) => updateField("address", e.target.value)} /></label>
-          <label className="form-field"><span>City</span><input value={form.city} onChange={(e) => updateField("city", e.target.value)} /></label>
-          <label className="form-field"><span>State</span><input value={form.state} onChange={(e) => updateField("state", e.target.value)} /></label>
-          <label className="form-field"><span>Latitude</span><input value={form.latitude} onChange={(e) => updateField("latitude", e.target.value)} /></label>
-          <label className="form-field"><span>Longitude</span><input value={form.longitude} onChange={(e) => updateField("longitude", e.target.value)} /></label>
+          <label className="form-field span-2">
+            <span>Street address (include ZIP) *</span>
+            <input value={form.address} onChange={(e) => updateField("address", e.target.value)} />
+          </label>
+          <label className="form-field">
+            <span>City *</span>
+            <input value={form.city} onChange={(e) => updateField("city", e.target.value)} />
+          </label>
+          <label className="form-field">
+            <span>State *</span>
+            <input value={form.state} onChange={(e) => updateField("state", e.target.value)} />
+          </label>
+          <div className="form-field span-2 geocode-row">
+            <div className="geocode-fields">
+              <label className="form-field">
+                <span>Latitude</span>
+                <input value={form.latitude} onChange={(e) => updateField("latitude", e.target.value)} />
+              </label>
+              <label className="form-field">
+                <span>Longitude</span>
+                <input value={form.longitude} onChange={(e) => updateField("longitude", e.target.value)} />
+              </label>
+            </div>
+            <button
+              type="button"
+              className="button-link secondary geocode-button"
+              onClick={handleGeocode}
+              disabled={geocoding}
+            >
+              {geocoding ? "Geocoding…" : "Geocode address"}
+            </button>
+            {geocodeError ? <small className="field-error">{geocodeError}</small> : null}
+          </div>
+        </div>
+        <div className="form-actions">
+          <button type="button" disabled={saving || actionLoading} onClick={saveLocation}>
+            {saving ? "Saving…" : "Save location"}
+          </button>
         </div>
       </section>
 
@@ -260,7 +381,7 @@ export default function BusinessDetailPage() {
         <h2>Contact</h2>
         <div className="form-grid">
           <label className="form-field"><span>Phone</span><input value={form.phone} onChange={(e) => updateField("phone", e.target.value)} /></label>
-          <label className="form-field"><span>Contact email / info</span><input value={form.contact_info} onChange={(e) => updateField("contact_info", e.target.value)} /></label>
+          <label className="form-field"><span>Contact email</span><input value={form.contact_info} onChange={(e) => updateField("contact_info", e.target.value)} placeholder="Optional" /></label>
           <label className="form-field"><span>Website</span><input value={form.website} onChange={(e) => updateField("website", e.target.value)} /></label>
           <label className="form-field"><span>Instagram</span><input value={form.instagram} onChange={(e) => updateField("instagram", e.target.value)} /></label>
         </div>
@@ -269,18 +390,26 @@ export default function BusinessDetailPage() {
       <section className="panel" id="owner">
         <h2>Owner</h2>
         <dl className="meta-grid">
-          <div><dt>Creator user ID</dt><dd>{business.user_id}</dd></div>
+          <div><dt>Claim status</dt><dd>{business.is_unclaimed ? "Unclaimed" : "Assigned owner"}</dd></div>
           <div><dt>Owner user ID</dt><dd>{business.owner_id ?? "—"}</dd></div>
           {business.owner_id ? (
             <div><dt>Owner profile</dt><dd><Link to={`/users/${business.owner_id}`}>View owner</Link></dd></div>
           ) : null}
         </dl>
-        <label className="form-field"><span>Reassign owner user ID</span><input value={form.owner_id} onChange={(e) => updateField("owner_id", e.target.value)} /></label>
+        <OwnerUserSelect
+          value={form.owner_id || "unclaimed"}
+          onChange={(ownerId) => updateField("owner_id", ownerId)}
+        />
+        <div className="form-actions">
+          <button type="button" disabled={saving || actionLoading} onClick={saveOwner}>
+            {saving ? "Saving…" : "Save owner"}
+          </button>
+        </div>
       </section>
 
       <section className="panel" id="status">
         <h2>Status</h2>
-        <BusinessFormFields values={form} errors={fieldErrors} onChange={updateField} hideBusinessName />
+        <BusinessFormFields values={form} errors={fieldErrors} onChange={updateField} hideBusinessName hideOwner />
         <section className="actions-panel inline-actions">
           <div className="row">
             {business.status !== "published" ? (

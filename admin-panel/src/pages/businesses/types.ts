@@ -46,6 +46,7 @@ export type BusinessDetail = {
   id: number;
   user_id: number;
   owner_id: number | null;
+  is_unclaimed: boolean;
   title: string;
   business_name: string;
   city: string;
@@ -152,7 +153,7 @@ export function emptyBusinessForm(): BusinessFormValues {
     verified_badge: false,
     admin_note: "",
     price: "",
-    owner_id: "",
+    owner_id: "unclaimed",
   };
 }
 
@@ -181,7 +182,7 @@ export function businessToFormValues(business: BusinessDetail): BusinessFormValu
     verified_badge: business.verified_badge,
     admin_note: business.admin_note || "",
     price: business.price ?? "",
-    owner_id: business.owner_id != null ? String(business.owner_id) : "",
+    owner_id: business.owner_id != null ? String(business.owner_id) : "unclaimed",
   };
 }
 
@@ -213,10 +214,22 @@ export function formValuesToPayload(values: BusinessFormValues): Record<string, 
     latitude: values.latitude.trim() ? Number(values.latitude) : null,
     longitude: values.longitude.trim() ? Number(values.longitude) : null,
   };
-  if (values.owner_id.trim()) {
-    payload.owner_id = Number(values.owner_id);
+  const ownerRaw = values.owner_id.trim();
+  if (ownerRaw && ownerRaw !== "unclaimed") {
+    payload.owner_id = Number(ownerRaw);
+  } else if (!ownerRaw || ownerRaw === "unclaimed") {
+    payload.owner_id = null;
   }
   return payload;
+}
+
+export function validateBusinessFormRequired(values: BusinessFormValues): string | null {
+  if (!values.business_name.trim()) return "Business name is required.";
+  if (!values.category.trim()) return "Category is required.";
+  if (!values.address.trim()) return "Street address (including ZIP) is required.";
+  if (!values.city.trim()) return "City is required.";
+  if (!values.state.trim()) return "State is required.";
+  return null;
 }
 
 export function buildBusinessListEndpoint(params: {

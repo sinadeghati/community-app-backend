@@ -571,3 +571,45 @@ button.danger, .button-link.danger {
   padding: 0.45rem 1rem;
 }
 .preview-disclaimer { font-size: 0.85rem; margin-bottom: 0.75rem; }
+
+.picker-results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+.picker-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.75rem;
+  align-items: center;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.55rem 0.75rem;
+  background: white;
+  cursor: pointer;
+}
+.picker-row.active {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 1px var(--teal);
+}
+.owner-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+.geocode-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.geocode-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+.geocode-button {
+  align-self: flex-start;
+}

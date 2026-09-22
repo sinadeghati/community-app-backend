@@ -8,9 +8,11 @@ import BusinessCreateMediaSection, {
 } from "./BusinessCreateMediaSection";
 import BusinessFormFields from "./BusinessFormFields";
 import { uploadPendingBusinessMedia } from "./businessMediaUpload";
+import { geocodeBusinessAddress } from "./geocodeBusinessAddress";
 import {
   emptyBusinessForm,
   formValuesToPayload,
+  validateBusinessFormRequired,
   type BusinessDetail,
   type BusinessFormValues,
 } from "./types";
@@ -25,6 +27,8 @@ export default function BusinessCreatePage() {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  const [geocoding, setGeocoding] = useState(false);
+  const [geocodeError, setGeocodeError] = useState("");
 
   const updateField = (key: keyof BusinessFormValues, value: string | boolean) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -40,13 +44,9 @@ export default function BusinessCreatePage() {
     event.preventDefault();
     if (saving) return;
 
-    if (!form.business_name.trim() || !form.city.trim() || !form.state.trim() || !form.contact_info.trim()) {
-      setError("Business name, city, state, and contact email/info are required.");
-      return;
-    }
-    if (!form.owner_id.trim()) {
-      setError("Owner user ID is required.");
-      setFieldErrors({ owner_id: ["Owner user ID is required."] });
+    const requiredMessage = validateBusinessFormRequired(form);
+    if (requiredMessage) {
+      setError(requiredMessage);
       return;
     }
 
@@ -57,10 +57,7 @@ export default function BusinessCreatePage() {
     try {
       const created = await apiFetch<BusinessDetail>("/admin/businesses/", {
         method: "POST",
-        body: JSON.stringify({
-          ...formValuesToPayload(form),
-          owner_id: Number(form.owner_id),
-        }),
+        body: JSON.stringify(formValuesToPayload(form)),
       });
 
       const hasMedia =
@@ -87,6 +84,32 @@ export default function BusinessCreatePage() {
     }
   };
 
+  const handleGeocode = async () => {
+    const requiredMessage = validateBusinessFormRequired(form);
+    if (requiredMessage) {
+      setGeocodeError(requiredMessage);
+      return;
+    }
+    setGeocoding(true);
+    setGeocodeError("");
+    try {
+      const result = await geocodeBusinessAddress({
+        address: form.address,
+        city: form.city,
+        state: form.state,
+      });
+      setForm((current) => ({
+        ...current,
+        latitude: String(result.latitude),
+        longitude: String(result.longitude),
+      }));
+    } catch (e) {
+      setGeocodeError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGeocoding(false);
+    }
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -106,6 +129,9 @@ export default function BusinessCreatePage() {
             errors={fieldErrors}
             onChange={updateField}
             includeOwner
+            onGeocodeAddress={handleGeocode}
+            geocoding={geocoding}
+            geocodeError={geocodeError}
           />
         </section>
 

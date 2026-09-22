@@ -12,6 +12,7 @@ from .business_image_views import (
 from .business_views import (
     AdminBusinessActionView,
     AdminBusinessDetailView,
+    AdminBusinessGeocodeView,
     AdminBusinessListCreateView,
     AdminPremiumListingsView,
 )
@@ -67,6 +68,7 @@ urlpatterns = [
     path("users/<int:user_id>/claims/", AdminUserClaimsView.as_view(), name="admin-users-claims"),
     path("users/<int:user_id>/reports/", AdminUserReportsView.as_view(), name="admin-users-reports"),
     path("businesses/", AdminBusinessListCreateView.as_view(), name="admin-businesses-list"),
+    path("businesses/geocode/", AdminBusinessGeocodeView.as_view(), name="admin-businesses-geocode"),
     path("businesses/<int:business_id>/", AdminBusinessDetailView.as_view(), name="admin-businesses-detail"),
     path("businesses/<int:business_id>/images/", AdminBusinessImageView.as_view(), name="admin-businesses-images"),
     path(
