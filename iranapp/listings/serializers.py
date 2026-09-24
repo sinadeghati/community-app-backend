@@ -12,9 +12,11 @@ class ListingImageSerializer(serializers.ModelSerializer):
         fields = ["id", "image", "image_url", "role", "uploaded_at"]
 
     def get_image_url(self, obj):
+        from core.media_urls import absolute_media_url
+
         request = self.context.get("request")
         if obj.image and request:
-            return request.build_absolute_uri(obj.image.url)
+            return absolute_media_url(request, obj.image)
         return None
 
 
@@ -62,10 +64,12 @@ class ListingSerializer(serializers.ModelSerializer):
         return ListingImageSerializer(qs, many=True, context=self.context).data
 
     def _image_url_for_role(self, obj, role):
+        from core.media_urls import absolute_media_url
+
         request = self.context.get("request")
         image = obj.images.filter(role=role, media_status=ListingImage.MediaStatus.ACTIVE).first()
         if image and image.image and request:
-            return request.build_absolute_uri(image.image.url)
+            return absolute_media_url(request, image.image)
         return None
 
     def get_cover_image(self, obj):

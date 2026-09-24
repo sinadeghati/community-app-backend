@@ -581,8 +581,15 @@ class AdminBusinessMediaTests(TestCase):
 
         upload = self._upload(role="cover")
         self.assertEqual(upload.status_code, 201)
-        self.assertEqual(upload.json()["role"], "cover")
-        self.assertIn("filename", upload.json())
+        body = upload.json()
+        self.assertEqual(body["role"], "cover")
+        self.assertIn("filename", body)
+        self.assertIn("image_url", body)
+        self.assertNotIn("/app/media/", body["image_url"])
+        image = ListingImage.objects.get(pk=body["id"])
+        self.assertTrue(image.image.storage.exists(image.image.name))
+        media_response = self.client.get(body["image_url"].replace("http://testserver", ""))
+        self.assertEqual(media_response.status_code, 200)
 
         listing = self.client.get(f"/api/admin/businesses/{self.listing.id}/")
         self.assertEqual(listing.status_code, 200)
@@ -591,6 +598,11 @@ class AdminBusinessMediaTests(TestCase):
         images = self.client.get(f"/api/admin/businesses/{self.listing.id}/images/")
         self.assertEqual(images.status_code, 200)
         self.assertEqual(len(images.json()), 1)
+
+        list_response = self.client.get("/api/admin/businesses/")
+        row = next(r for r in list_response.json()["results"] if r["id"] == self.listing.id)
+        self.assertIn("thumbnail_url", row)
+        self.assertNotIn("/app/media/", row["thumbnail_url"] or "")
 
     def test_set_cover_demotes_previous_cover(self):
         first = self._upload(name="cover1.jpg", role="cover")

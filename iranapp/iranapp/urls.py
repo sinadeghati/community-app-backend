@@ -1,9 +1,9 @@
 from django.contrib import admin
 from django.urls import path, include, re_path
 from django.conf import settings
-from django.conf.urls.static import static
 from rest_framework_simplejwt.views import TokenRefreshView
 
+from core.media_views import PublicMediaView
 from korook_admin.spa_views import AdminSpaView
 from accounts.views import ResetPasswordPageView
 
@@ -38,5 +38,12 @@ urlpatterns = [
 
 ]
 
-if settings.DEBUG or settings.SERVE_MEDIA:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+if settings.SERVE_MEDIA:
+    media_prefix = settings.MEDIA_URL.lstrip("/")
+    urlpatterns += [
+        re_path(
+            rf"^{media_prefix}(?P<path>.*)$",
+            PublicMediaView.as_view(),
+            name="public-media",
+        ),
+    ]

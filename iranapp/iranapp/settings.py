@@ -248,9 +248,16 @@ GEOCODE_UPSTREAM_MIN_INTERVAL_SECONDS = float(
     os.environ.get('GEOCODE_UPSTREAM_MIN_INTERVAL_SECONDS', '1')
 )
 
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+_media_url = os.environ.get("MEDIA_URL", "/media/").strip() or "/media/"
+if not _media_url.startswith("/"):
+    _media_url = f"/{_media_url}"
+if not _media_url.endswith("/"):
+    _media_url = f"{_media_url}/"
+MEDIA_URL = _media_url
 
-# Serve uploaded files when using local MEDIA_ROOT (default on Railway).
+_media_root = os.environ.get("MEDIA_ROOT", "").strip()
+MEDIA_ROOT = Path(_media_root) if _media_root else BASE_DIR / "media"
+
+# Serve uploaded files when using local/volume-backed MEDIA_ROOT (default on Railway).
 # Independent of DEBUG so production can run with DEBUG=False.
 SERVE_MEDIA = _env_bool("SERVE_MEDIA", default=True)

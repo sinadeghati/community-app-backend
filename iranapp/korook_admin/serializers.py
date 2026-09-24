@@ -165,6 +165,7 @@ class AdminUserReportSummarySerializer(serializers.ModelSerializer):
 
 
 class ListingImageAdminSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
     image_url = serializers.SerializerMethodField()
     filename = serializers.SerializerMethodField()
     file_size = serializers.SerializerMethodField()
@@ -185,10 +186,17 @@ class ListingImageAdminSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["uploaded_at", "reviewed_at"]
 
+    def get_image(self, obj):
+        from core.media_urls import media_storage_name
+
+        return media_storage_name(obj.image)
+
     def get_image_url(self, obj):
+        from core.media_urls import absolute_media_url
+
         request = self.context.get("request")
         if obj.image and request:
-            return request.build_absolute_uri(obj.image.url)
+            return absolute_media_url(request, obj.image)
         return None
 
     def get_filename(self, obj):
@@ -299,9 +307,9 @@ class ListingAdminListSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if not request:
             return None
-        from django.core.files.storage import default_storage
+        from core.media_urls import absolute_media_url
 
-        return request.build_absolute_uri(default_storage.url(thumbnail_name))
+        return absolute_media_url(request, thumbnail_name)
 
 class EventAdminListSerializer(serializers.ModelSerializer):
     cover_image_url = serializers.SerializerMethodField()
