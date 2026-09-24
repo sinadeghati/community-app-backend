@@ -166,19 +166,22 @@ class AdminBusinessListPerformanceTests(TestCase):
             status=Listing.Status.PUBLISHED,
             is_featured=True,
         )
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        cover_bytes = SimpleUploadedFile("cover.jpg", b"cover-bytes", content_type="image/jpeg")
         ListingImage.objects.create(
             listing=self.listing,
-            image="listings/cover.jpg",
+            image=cover_bytes,
             role=ListingImage.Role.COVER,
         )
         ListingImage.objects.create(
             listing=self.listing,
-            image="listings/gallery-1.jpg",
+            image=SimpleUploadedFile("gallery-1.jpg", b"g1", content_type="image/jpeg"),
             role=ListingImage.Role.GALLERY,
         )
         ListingImage.objects.create(
             listing=self.listing,
-            image="listings/gallery-2.jpg",
+            image=SimpleUploadedFile("gallery-2.jpg", b"g2", content_type="image/jpeg"),
             role=ListingImage.Role.GALLERY,
         )
 
@@ -194,7 +197,7 @@ class AdminBusinessListPerformanceTests(TestCase):
         self.assertTrue(row["is_featured"])
         self.assertIn("thumbnail_url", row)
         self.assertNotIn("images", row)
-        self.assertIn("cover.jpg", row["thumbnail_url"])
+        self.assertIn("cover", row["thumbnail_url"])
 
     def test_business_list_bounded_query_count(self):
         with CaptureQueriesContext(connection) as ctx:
@@ -238,6 +241,112 @@ class AdminBusinessListPerformanceTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["count"], 1)
         self.assertEqual(response.json()["results"][0]["title"], "SD Shop")
+
+
+class AdminBusinessListThumbnailTests(TestCase):
+    def setUp(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        self.client = Client(enforce_csrf_checks=False)
+        self.staff = User.objects.create_user(
+            username="staffthumb",
+            email="staffthumb@korook.com",
+            password="StaffPass!234",
+            is_staff=True,
+        )
+        self.client.post(
+            "/api/admin/auth/login/",
+            {"username": "staffthumb", "password": "StaffPass!234"},
+            content_type="application/json",
+        )
+        self.simple_file = lambda name, body=b"x": SimpleUploadedFile(
+            name, body, content_type="image/png"
+        )
+        self.user = self.staff
+
+    def _row_for(self, listing_id):
+        response = self.client.get("/api/admin/businesses/?page_size=50")
+        self.assertEqual(response.status_code, 200)
+        return next(r for r in response.json()["results"] if r["id"] == listing_id)
+
+    def test_list_thumbnail_prefers_logo_over_cover(self):
+        listing = Listing.objects.create(
+            user=self.user,
+            title="Logo First",
+            city="LA",
+            state="CA",
+            contact_info="",
+            address="1 St",
+            category="Food",
+        )
+        ListingImage.objects.create(
+            listing=listing,
+            image=self.simple_file("brand-logo.png"),
+            role=ListingImage.Role.LOGO,
+        )
+        ListingImage.objects.create(
+            listing=listing,
+            image=self.simple_file("hero-cover.png"),
+            role=ListingImage.Role.COVER,
+        )
+        row = self._row_for(listing.id)
+        self.assertIn("brand-logo", row["thumbnail_url"])
+        self.assertNotIn("hero-cover", row["thumbnail_url"])
+
+    def test_list_thumbnail_uses_cover_when_no_logo(self):
+        listing = Listing.objects.create(
+            user=self.user,
+            title="Cover Only",
+            city="LA",
+            state="CA",
+            contact_info="",
+            address="1 St",
+            category="Food",
+        )
+        ListingImage.objects.create(
+            listing=listing,
+            image=self.simple_file("only-cover.png"),
+            role=ListingImage.Role.COVER,
+        )
+        row = self._row_for(listing.id)
+        self.assertIn("only-cover", row["thumbnail_url"])
+
+    def test_list_thumbnail_null_without_media(self):
+        listing = Listing.objects.create(
+            user=self.user,
+            title="No Media",
+            city="LA",
+            state="CA",
+            contact_info="",
+            address="1 St",
+            category="Food",
+        )
+        row = self._row_for(listing.id)
+        self.assertIsNone(row["thumbnail_url"])
+
+    def test_list_thumbnail_falls_back_when_logo_file_missing(self):
+        listing = Listing.objects.create(
+            user=self.user,
+            title="Broken Logo",
+            city="LA",
+            state="CA",
+            contact_info="",
+            address="1 St",
+            category="Food",
+        )
+        ListingImage.objects.create(
+            listing=listing,
+            image="listings/missing-logo.png",
+            role=ListingImage.Role.LOGO,
+        )
+        ListingImage.objects.create(
+            listing=listing,
+            image=self.simple_file("fallback-cover.png"),
+            role=ListingImage.Role.COVER,
+        )
+        row = self._row_for(listing.id)
+        self.assertIn("fallback-cover", row["thumbnail_url"])
+        self.assertNotIn("missing-logo", row["thumbnail_url"] or "")
 
 
 class AdminBusinessCrudTests(TestCase):

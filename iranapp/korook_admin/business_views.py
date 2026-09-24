@@ -1,5 +1,5 @@
 from django.contrib.auth.models import User
-from django.db.models import Case, IntegerField, OuterRef, Q, Subquery, Value, When
+from django.db.models import OuterRef, Q, Subquery
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
@@ -29,23 +29,22 @@ from .serializers import (
 )
 
 
-def _thumbnail_subquery():
-    return ListingImage.objects.filter(
-        listing_id=OuterRef("pk"),
-        media_status=ListingImage.MediaStatus.ACTIVE,
-    ).annotate(
-        role_order=Case(
-            When(role=ListingImage.Role.COVER, then=Value(0)),
-            When(role=ListingImage.Role.LOGO, then=Value(1)),
-            default=Value(2),
-            output_field=IntegerField(),
+def _listing_image_subquery(role):
+    return (
+        ListingImage.objects.filter(
+            listing_id=OuterRef("pk"),
+            media_status=ListingImage.MediaStatus.ACTIVE,
+            role=role,
         )
-    ).order_by("role_order", "id").values("image")[:1]
+        .order_by("id")
+        .values("image")[:1]
+    )
 
 
 def _business_list_queryset():
     return Listing.objects.annotate(
-        thumbnail_image=Subquery(_thumbnail_subquery())
+        thumbnail_logo=Subquery(_listing_image_subquery(ListingImage.Role.LOGO)),
+        thumbnail_cover=Subquery(_listing_image_subquery(ListingImage.Role.COVER)),
     ).order_by("-created_at")
 
 

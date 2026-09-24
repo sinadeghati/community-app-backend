@@ -301,15 +301,17 @@ class ListingAdminListSerializer(serializers.ModelSerializer):
         ]
 
     def get_thumbnail_url(self, obj):
-        thumbnail_name = getattr(obj, "thumbnail_image", None)
-        if not thumbnail_name:
-            return None
         request = self.context.get("request")
         if not request:
             return None
-        from core.media_urls import absolute_media_url
+        from core.media_urls import absolute_media_url, media_file_exists
 
-        return absolute_media_url(request, thumbnail_name)
+        logo_name = getattr(obj, "thumbnail_logo", None)
+        cover_name = getattr(obj, "thumbnail_cover", None)
+        for storage_name in (logo_name, cover_name):
+            if storage_name and media_file_exists(storage_name):
+                return absolute_media_url(request, storage_name)
+        return None
 
 class EventAdminListSerializer(serializers.ModelSerializer):
     cover_image_url = serializers.SerializerMethodField()
