@@ -10,6 +10,7 @@ from rest_framework import viewsets
 
 from .categories import BUSINESS_CATEGORIES
 from .models import Listing
+from .ownership import listings_queryset_for_user
 from .serializers import ListingSerializer, ListingImageSerializer
 
 
@@ -89,7 +90,7 @@ class MyListingsViewSet(ModelViewSet):
         return context
 
     def get_queryset(self):
-        return Listing.objects.filter(user=self.request.user).order_by("-created_at")
+        return listings_queryset_for_user(self.request.user).order_by("-created_at")
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)

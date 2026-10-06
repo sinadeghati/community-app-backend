@@ -473,6 +473,7 @@ class AdminBusinessCrudTests(TestCase):
         self.assertEqual(approve.status_code, 200)
         unclaimed.refresh_from_db()
         self.assertEqual(unclaimed.owner_id, requester.id)
+        self.assertEqual(unclaimed.user_id, requester.id)
         self.assertEqual(Listing.objects.filter(title="Claim Me").count(), 1)
 
     def test_patch_business(self):

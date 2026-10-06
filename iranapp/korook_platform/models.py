@@ -240,6 +240,11 @@ class BusinessClaim(models.Model):
         default=Status.PENDING,
         db_index=True,
     )
+    claimant_name = models.CharField(max_length=255, blank=True, default="")
+    relationship_role = models.CharField(max_length=128, blank=True, default="")
+    contact_email = models.EmailField(blank=True, default="")
+    contact_phone = models.CharField(max_length=50, blank=True, default="")
+    verification_message = models.TextField(blank=True, default="")
     admin_note = models.TextField(blank=True, default="")
     reviewed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -253,6 +258,13 @@ class BusinessClaim(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["listing", "requester"],
+                condition=models.Q(status="pending"),
+                name="unique_pending_business_claim_per_user_listing",
+            ),
+        ]
 
     def __str__(self):
         return f"Claim {self.id} listing={self.listing_id} ({self.status})"

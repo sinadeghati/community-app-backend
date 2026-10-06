@@ -1,10 +1,13 @@
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from korook_admin.audit import log_admin_action
+from .ownership import transfer_listing_ownership
 from listings.models import Listing
+from listings.unclaimed import listing_is_unclaimed
 from korook_platform.models import BusinessClaim
 
 from .mixins import AdminAPIMixin
@@ -47,23 +50,43 @@ class AdminClaimDetailView(AdminAPIMixin, APIView):
 
 class AdminClaimApproveView(AdminAPIMixin, APIView):
     def post(self, request, claim_id):
-        claim = BusinessClaim.objects.select_related("listing").filter(pk=claim_id).first()
-        if not claim:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-        if claim.status != BusinessClaim.Status.PENDING:
-            return Response(
-                {"detail": "Claim is not pending."},
-                status=status.HTTP_400_BAD_REQUEST,
+        with transaction.atomic():
+            claim = (
+                BusinessClaim.objects.select_for_update()
+                .select_related("listing")
+                .filter(pk=claim_id)
+                .first()
             )
-        listing = claim.listing
-        before = {"owner_id": listing.owner_id, "claim_status": claim.status}
-        listing.owner = claim.requester
-        listing.save(update_fields=["owner", "updated_at"])
-        claim.status = BusinessClaim.Status.APPROVED
-        claim.reviewed_by = request.user
-        claim.reviewed_at = timezone.now()
-        claim.admin_note = request.data.get("admin_note", claim.admin_note)
-        claim.save()
+            if not claim:
+                return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+            if claim.status != BusinessClaim.Status.PENDING:
+                return Response(
+                    {"detail": "Claim is not pending."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            listing = (
+                Listing.objects.select_for_update()
+                .filter(pk=claim.listing_id)
+                .first()
+            )
+            if not listing:
+                return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+            if not listing_is_unclaimed(listing):
+                return Response(
+                    {"detail": "This business already has an owner."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            before = {
+                "owner_id": listing.owner_id,
+                "user_id": listing.user_id,
+                "claim_status": claim.status,
+            }
+            transfer_listing_ownership(listing, claim.requester)
+            claim.status = BusinessClaim.Status.APPROVED
+            claim.reviewed_by = request.user
+            claim.reviewed_at = timezone.now()
+            claim.admin_note = request.data.get("admin_note", claim.admin_note)
+            claim.save()
         log_admin_action(
             actor=request.user,
             action_type="claim.approve",
@@ -71,7 +94,11 @@ class AdminClaimApproveView(AdminAPIMixin, APIView):
             object_id=claim.id,
             summary=f"Approved claim for listing {listing.id}",
             before_state=before,
-            after_state={"owner_id": listing.owner_id, "claim_status": claim.status},
+            after_state={
+                "owner_id": listing.owner_id,
+                "user_id": listing.user_id,
+                "claim_status": claim.status,
+            },
             admin_note=claim.admin_note,
         )
         return Response(BusinessClaimAdminSerializer(claim).data)

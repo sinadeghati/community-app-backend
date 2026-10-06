@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.utils import timezone
 from .models import Listing, ListingImage
+from .unclaimed import listing_is_unclaimed
 
 
 
@@ -28,6 +29,7 @@ class ListingSerializer(serializers.ModelSerializer):
     cover_image = serializers.SerializerMethodField()
     logo = serializers.SerializerMethodField()
     is_verified = serializers.BooleanField(source="verified_badge", read_only=True)
+    is_unclaimed = serializers.SerializerMethodField()
 
     class Meta:
         model = Listing
@@ -57,6 +59,7 @@ class ListingSerializer(serializers.ModelSerializer):
             "created_at",
             "images",
             "posted_days_ago",
+            "is_unclaimed",
         ]
 
     def get_images(self, obj):
@@ -82,3 +85,6 @@ class ListingSerializer(serializers.ModelSerializer):
         if not obj.created_at:
             return None
         return (timezone.now() - obj.created_at).days
+
+    def get_is_unclaimed(self, obj):
+        return listing_is_unclaimed(obj)
