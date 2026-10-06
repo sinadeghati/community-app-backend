@@ -150,68 +150,76 @@ export default function AddressAutocomplete({ onSelect, disabled = false }: Prop
   const showNoResults =
     open && !loading && !error && query.trim().length >= MIN_QUERY_LENGTH && suggestions.length === 0;
 
+  const panelVisible =
+    open && (loading || Boolean(error) || showNoResults || suggestions.length > 0);
+
   return (
-    <div className="form-field span-2 address-autocomplete" ref={rootRef}>
+    <div
+      className={`form-field span-2 address-autocomplete${panelVisible ? " is-open" : ""}`}
+      ref={rootRef}
+    >
       <label htmlFor={inputId}>
         <span>Search address</span>
       </label>
-      <input
-        id={inputId}
-        type="search"
-        role="combobox"
-        aria-expanded={open}
-        aria-controls={listId}
-        aria-autocomplete="list"
-        aria-activedescendant={
-          activeIndex >= 0 ? `${inputId}-option-${activeIndex}` : undefined
-        }
-        autoComplete="off"
-        disabled={disabled}
-        value={query}
-        placeholder="Start typing a street address…"
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setOpen(true);
-        }}
-        onFocus={() => {
-          if (suggestions.length > 0) setOpen(true);
-        }}
-        onKeyDown={handleKeyDown}
-      />
+      <div className="address-autocomplete-control">
+        <input
+          id={inputId}
+          type="search"
+          role="combobox"
+          aria-expanded={panelVisible}
+          aria-controls={listId}
+          aria-autocomplete="list"
+          aria-activedescendant={
+            activeIndex >= 0 ? `${inputId}-option-${activeIndex}` : undefined
+          }
+          autoComplete="off"
+          disabled={disabled}
+          value={query}
+          placeholder="Start typing a street address…"
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => {
+            if (suggestions.length > 0 || loading || error) setOpen(true);
+          }}
+          onKeyDown={handleKeyDown}
+        />
 
-      {open ? (
-        <ul
-          id={listId}
-          role="listbox"
-          className="address-autocomplete-list"
-          aria-label="Address suggestions"
-        >
-          {loading ? (
-            <li className="address-autocomplete-status" role="status">Searching…</li>
-          ) : null}
-          {error ? (
-            <li className="address-autocomplete-status error" role="alert">{error}</li>
-          ) : null}
-          {showNoResults ? (
-            <li className="address-autocomplete-status" role="status">No matching addresses.</li>
-          ) : null}
-          {!loading && !error
-            ? suggestions.map((item, index) => (
-                <li
-                  key={item.id}
-                  id={`${inputId}-option-${index}`}
-                  role="option"
-                  aria-selected={index === activeIndex}
-                  className={index === activeIndex ? "active" : undefined}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => pickSuggestion(index)}
-                >
-                  {item.label}
-                </li>
-              ))
-            : null}
-        </ul>
-      ) : null}
+        {panelVisible ? (
+          <ul
+            id={listId}
+            role="listbox"
+            className="address-autocomplete-list"
+            aria-label="Address suggestions"
+          >
+            {loading ? (
+              <li className="address-autocomplete-status" role="status">Searching…</li>
+            ) : null}
+            {error ? (
+              <li className="address-autocomplete-status error" role="alert">{error}</li>
+            ) : null}
+            {showNoResults ? (
+              <li className="address-autocomplete-status" role="status">No matching addresses.</li>
+            ) : null}
+            {!loading && !error
+              ? suggestions.map((item, index) => (
+                  <li
+                    key={item.id}
+                    id={`${inputId}-option-${index}`}
+                    role="option"
+                    aria-selected={index === activeIndex}
+                    className={index === activeIndex ? "active" : undefined}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => pickSuggestion(index)}
+                  >
+                    {item.label}
+                  </li>
+                ))
+              : null}
+          </ul>
+        ) : null}
+      </div>
       <small className="muted address-autocomplete-hint">
         Select a suggestion to fill street, city, state, ZIP, and coordinates. Fields stay editable.
       </small>
