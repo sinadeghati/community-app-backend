@@ -1,3 +1,5 @@
+import AddressAutocomplete from "./AddressAutocomplete";
+import type { ParsedAddressSelection } from "./nominatimAddress";
 import type { BusinessFormValues } from "./types";
 import CategorySelect from "./CategorySelect";
 import OwnerUserSelect from "./OwnerUserSelect";
@@ -18,6 +20,7 @@ type Props = {
   onGeocodeAddress?: () => void;
   geocoding?: boolean;
   geocodeError?: string;
+  onAddressAutofill?: (selection: ParsedAddressSelection) => void;
 };
 
 export default function BusinessFormFields({
@@ -30,6 +33,7 @@ export default function BusinessFormFields({
   onGeocodeAddress,
   geocoding = false,
   geocodeError = "",
+  onAddressAutofill,
 }: Props) {
   return (
     <div className="form-grid">
@@ -99,6 +103,10 @@ export default function BusinessFormFields({
           onChange={(e) => onChange("about", e.target.value)}
         />
       </label>
+
+      {onAddressAutofill ? (
+        <AddressAutocomplete onSelect={onAddressAutofill} />
+      ) : null}
 
       <label className="form-field span-2">
         <span>Street address (include ZIP) *</span>

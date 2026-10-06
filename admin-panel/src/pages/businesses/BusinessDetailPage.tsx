@@ -2,11 +2,13 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { ApiError, apiFetch, type Claim, type Paginated } from "../../api";
 import { StatusBanner } from "../adminShared";
+import AddressAutocomplete from "./AddressAutocomplete";
 import BusinessFormFields from "./BusinessFormFields";
 import BusinessMediaSection from "./BusinessMediaSection";
 import CategorySelect from "./CategorySelect";
 import OwnerUserSelect from "./OwnerUserSelect";
 import { geocodeBusinessAddress } from "./geocodeBusinessAddress";
+import type { ParsedAddressSelection } from "./nominatimAddress";
 import {
   businessToFormValues,
   formValuesToPayload,
@@ -182,6 +184,23 @@ export default function BusinessDetailPage() {
 
   const displayName = business.business_name || business.title;
 
+  const handleAddressAutofill = (selection: ParsedAddressSelection) => {
+    setForm((current) =>
+      current
+        ? {
+            ...current,
+            address: selection.address,
+            city: selection.city,
+            state: selection.state,
+            latitude: selection.latitude,
+            longitude: selection.longitude,
+          }
+        : current
+    );
+    setGeocodeError("");
+    setMessage("Address fields updated from search. Save location to persist.");
+  };
+
   const handleGeocode = async () => {
     if (!form) return;
     const requiredMessage = validateBusinessFormRequired(form);
@@ -327,6 +346,7 @@ export default function BusinessDetailPage() {
       <section className="panel" id="location">
         <h2>Location</h2>
         <div className="form-grid">
+          <AddressAutocomplete onSelect={handleAddressAutofill} disabled={saving || actionLoading} />
           <label className="form-field span-2">
             <span>Street address (include ZIP) *</span>
             <input value={form.address} onChange={(e) => updateField("address", e.target.value)} />

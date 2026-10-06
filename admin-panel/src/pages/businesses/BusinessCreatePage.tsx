@@ -9,6 +9,7 @@ import BusinessCreateMediaSection, {
 import BusinessFormFields from "./BusinessFormFields";
 import { uploadPendingBusinessMedia } from "./businessMediaUpload";
 import { geocodeBusinessAddress } from "./geocodeBusinessAddress";
+import type { ParsedAddressSelection } from "./nominatimAddress";
 import {
   emptyBusinessForm,
   formValuesToPayload,
@@ -84,6 +85,27 @@ export default function BusinessCreatePage() {
     }
   };
 
+  const handleAddressAutofill = (selection: ParsedAddressSelection) => {
+    setForm((current) => ({
+      ...current,
+      address: selection.address,
+      city: selection.city,
+      state: selection.state,
+      latitude: selection.latitude,
+      longitude: selection.longitude,
+    }));
+    setGeocodeError("");
+    setFieldErrors((current) => {
+      const next = { ...current };
+      delete next.address;
+      delete next.city;
+      delete next.state;
+      delete next.latitude;
+      delete next.longitude;
+      return next;
+    });
+  };
+
   const handleGeocode = async () => {
     const requiredMessage = validateBusinessFormRequired(form);
     if (requiredMessage) {
@@ -132,6 +154,7 @@ export default function BusinessCreatePage() {
             onGeocodeAddress={handleGeocode}
             geocoding={geocoding}
             geocodeError={geocodeError}
+            onAddressAutofill={handleAddressAutofill}
           />
         </section>
 
