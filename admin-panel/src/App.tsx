@@ -15,6 +15,7 @@ import PromotionCreatePage from "./pages/promotions/PromotionCreatePage";
 import PromotionDetailPage from "./pages/promotions/PromotionDetailPage";
 import ClaimsPage from "./pages/ClaimsPage";
 import ReportsPage from "./pages/ReportsPage";
+import AdminErrorBoundary from "./pages/AdminErrorBoundary";
 
 const NAV = [
   ["Dashboard", "/"],
@@ -145,6 +146,7 @@ export default function App() {
       <Route path="/*" element={
         user ? (
           <Shell onLogout={logout}>
+            <AdminErrorBoundary>
             <Routes>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/users/:id" element={<UserDetailPage />} />
@@ -161,6 +163,7 @@ export default function App() {
               <Route path="/claims" element={<ClaimsPage />} />
               <Route path="/reports" element={<ReportsPage />} />
             </Routes>
+            </AdminErrorBoundary>
           </Shell>
         ) : <Navigate to="/login" />
       } />

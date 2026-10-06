@@ -1,4 +1,4 @@
-import { Link, useBlocker, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { ApiError, apiFetch, type Claim, type Paginated } from "../../api";
 import { StatusBanner } from "../adminShared";
@@ -67,15 +67,6 @@ export default function BusinessDetailPage() {
     if (!form) return false;
     return businessFormMainSnapshot(form) !== lastSavedSnapshot;
   }, [form, lastSavedSnapshot]);
-
-  const blocker = useBlocker(isDirty);
-
-  useEffect(() => {
-    if (blocker.state !== "blocked") return;
-    const leave = window.confirm("You have unsaved changes. Leave this page without saving?");
-    if (leave) blocker.proceed();
-    else blocker.reset();
-  }, [blocker]);
 
   useEffect(() => {
     if (!isDirty) return;

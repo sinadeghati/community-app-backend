@@ -708,3 +708,10 @@ button.danger, .button-link.danger {
 .business-save-bar-footer {
   margin-top: 0;
 }
+.admin-error-boundary {
+  max-width: 40rem;
+  margin: 2rem auto;
+}
+.admin-error-boundary h1 {
+  margin-top: 0;
+}
