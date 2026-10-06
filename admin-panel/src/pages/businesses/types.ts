@@ -186,6 +186,19 @@ export function businessToFormValues(business: BusinessDetail): BusinessFormValu
   };
 }
 
+/** Snapshot for dirty-checking the main business edit form (owner saved separately). */
+export function businessFormMainSnapshot(values: BusinessFormValues): string {
+  const { owner_id: _owner, ...rest } = values;
+  return JSON.stringify(rest);
+}
+
+/** PATCH payload for the unified business edit form (excludes owner assignment). */
+export function formValuesToBusinessPatch(values: BusinessFormValues): Record<string, unknown> {
+  const payload = formValuesToPayload(values);
+  delete payload.owner_id;
+  return payload;
+}
+
 export function formValuesToPayload(values: BusinessFormValues): Record<string, unknown> {
   const name = values.business_name.trim();
   const payload: Record<string, unknown> = {

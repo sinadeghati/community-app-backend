@@ -21,6 +21,16 @@ type Props = {
   geocoding?: boolean;
   geocodeError?: string;
   onAddressAutofill?: (selection: ParsedAddressSelection) => void;
+  /** Hide field groups already shown elsewhere on the business detail page. */
+  omitSections?: {
+    category?: boolean;
+    status?: boolean;
+    description?: boolean;
+    about?: boolean;
+    location?: boolean;
+    contact?: boolean;
+    monetization?: boolean;
+  };
 };
 
 export default function BusinessFormFields({
@@ -34,6 +44,7 @@ export default function BusinessFormFields({
   geocoding = false,
   geocodeError = "",
   onAddressAutofill,
+  omitSections = {},
 }: Props) {
   return (
     <div className="form-grid">
@@ -54,23 +65,27 @@ export default function BusinessFormFields({
         </label>
       )}
 
-      <CategorySelect
-        value={values.category}
-        onChange={(value) => onChange("category", value)}
-        error={fieldError(errors, "category")}
-      />
+      {omitSections.category ? null : (
+        <CategorySelect
+          value={values.category}
+          onChange={(value) => onChange("category", value)}
+          error={fieldError(errors, "category")}
+        />
+      )}
 
-      <label className="form-field">
-        <span>Status</span>
-        <select
-          value={values.status}
-          onChange={(e) => onChange("status", e.target.value)}
-        >
-          <option value="draft">Draft</option>
-          <option value="published">Published</option>
-          <option value="hidden">Hidden</option>
-        </select>
-      </label>
+      {omitSections.status ? null : (
+        <label className="form-field">
+          <span>Status</span>
+          <select
+            value={values.status}
+            onChange={(e) => onChange("status", e.target.value)}
+          >
+            <option value="draft">Draft</option>
+            <option value="published">Published</option>
+            <option value="hidden">Hidden</option>
+          </select>
+        </label>
+      )}
 
       {hideOwner ? null : includeOwner ? (
         <OwnerUserSelect
@@ -86,28 +101,31 @@ export default function BusinessFormFields({
         />
       )}
 
-      <label className="form-field span-2">
-        <span>Description</span>
-        <textarea
-          rows={4}
-          value={values.description}
-          onChange={(e) => onChange("description", e.target.value)}
-        />
-      </label>
+      {omitSections.description ? null : (
+        <label className="form-field span-2">
+          <span>Description</span>
+          <textarea
+            rows={4}
+            value={values.description}
+            onChange={(e) => onChange("description", e.target.value)}
+          />
+        </label>
+      )}
 
-      <label className="form-field span-2">
-        <span>About</span>
-        <textarea
-          rows={3}
-          value={values.about}
-          onChange={(e) => onChange("about", e.target.value)}
-        />
-      </label>
+      {omitSections.about ? null : (
+        <label className="form-field span-2">
+          <span>About</span>
+          <textarea
+            rows={3}
+            value={values.about}
+            onChange={(e) => onChange("about", e.target.value)}
+          />
+        </label>
+      )}
 
-      {onAddressAutofill ? (
-        <AddressAutocomplete onSelect={onAddressAutofill} />
-      ) : null}
-
+      {omitSections.location ? null : (
+      <>
+      {onAddressAutofill ? <AddressAutocomplete onSelect={onAddressAutofill} /> : null}
       <label className="form-field span-2">
         <span>Street address (include ZIP) *</span>
         <input
@@ -178,7 +196,11 @@ export default function BusinessFormFields({
           <small className="field-error">{fieldError(errors, "latitude")}</small>
         ) : null}
       </div>
+      </>
+      )}
 
+      {omitSections.contact ? null : (
+      <>
       <label className="form-field">
         <span>Phone</span>
         <input
@@ -217,7 +239,11 @@ export default function BusinessFormFields({
           onChange={(e) => onChange("instagram", e.target.value)}
         />
       </label>
+      </>
+      )}
 
+      {omitSections.monetization ? null : (
+      <>
       <label className="form-field">
         <span>Price</span>
         <input
@@ -303,6 +329,8 @@ export default function BusinessFormFields({
           onChange={(e) => onChange("admin_note", e.target.value)}
         />
       </label>
+      </>
+      )}
     </div>
   );
 }
