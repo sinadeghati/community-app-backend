@@ -4,6 +4,7 @@ import { ActionPanel, DataTable, StatusBanner, useAdminList } from "./adminShare
 type ClaimRow = {
   id: number;
   listing_title: string;
+  listing_business_name: string;
   requester_username: string;
   claimant_name: string;
   relationship_role: string;
@@ -40,7 +41,8 @@ export default function ClaimsPage() {
           rows={rows}
           columns={[
             { key: "id", label: "ID" },
-            { key: "listing_title", label: "Business" },
+            { key: "listing_business_name", label: "Business" },
+            { key: "listing_title", label: "Listing title" },
             { key: "requester_username", label: "Korook user" },
             { key: "claimant_name", label: "Claimant name" },
             { key: "relationship_role", label: "Role" },

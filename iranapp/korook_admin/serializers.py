@@ -789,6 +789,7 @@ class PromotionAdminSerializer(serializers.ModelSerializer):
 
 class BusinessClaimAdminSerializer(serializers.ModelSerializer):
     listing_title = serializers.CharField(source="listing.title", read_only=True)
+    listing_business_name = serializers.SerializerMethodField()
     requester_username = serializers.CharField(source="requester.username", read_only=True)
     requester_email = serializers.CharField(source="requester.email", read_only=True)
 
@@ -798,6 +799,7 @@ class BusinessClaimAdminSerializer(serializers.ModelSerializer):
             "id",
             "listing",
             "listing_title",
+            "listing_business_name",
             "requester",
             "requester_username",
             "requester_email",
@@ -813,6 +815,10 @@ class BusinessClaimAdminSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ["reviewed_by", "reviewed_at", "created_at"]
+
+    def get_listing_business_name(self, obj):
+        listing = obj.listing
+        return (listing.business_name or listing.title or "").strip()
 
 
 class ContentReportAdminSerializer(serializers.ModelSerializer):
