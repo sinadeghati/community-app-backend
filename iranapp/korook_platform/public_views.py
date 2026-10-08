@@ -93,15 +93,6 @@ class PublicPromotionSerializer(serializers.ModelSerializer):
         return None
 
 
-class PublicEventListView(APIView):
-    permission_classes = [AllowAny]
-
-    def get(self, request):
-        qs = Event.objects.filter(status=Event.Status.PUBLISHED).order_by("-starts_at")
-        serializer = PublicEventSerializer(qs, many=True, context={"request": request})
-        return Response(serializer.data)
-
-
 class PublicPromotionListView(APIView):
     permission_classes = [AllowAny]
 
