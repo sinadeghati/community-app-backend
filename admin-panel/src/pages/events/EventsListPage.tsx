@@ -213,9 +213,21 @@ export default function EventsListPage() {
                 render: (row) => row.listing_title || "—",
               },
               {
+                key: "owner_username",
+                label: "Owner",
+                render: (row) => (
+                  <div>
+                    <div>{row.owner_username}</div>
+                    {row.owner_email ? (
+                      <small className="muted">{row.owner_email}</small>
+                    ) : null}
+                  </div>
+                ),
+              },
+              {
                 key: "organizer_name",
                 label: "Organizer",
-                render: (row) => row.organizer_name || row.owner_username,
+                render: (row) => row.organizer_name || "—",
               },
               { key: "category", label: "Category", render: (row) => row.category || "—" },
               { key: "city", label: "City", render: (row) => row.city || "—" },

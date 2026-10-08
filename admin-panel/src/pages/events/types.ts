@@ -6,6 +6,7 @@ export type EventListRow = {
   listing_title: string | null;
   owner_id: number;
   owner_username: string;
+  owner_email?: string;
   organizer: string;
   organizer_name: string;
   category: string;

@@ -317,6 +317,7 @@ class EventAdminListSerializer(serializers.ModelSerializer):
     cover_image_url = serializers.SerializerMethodField()
     listing_title = serializers.SerializerMethodField()
     owner_username = serializers.CharField(source="owner.username", read_only=True)
+    owner_email = serializers.CharField(source="owner.email", read_only=True)
     organizer_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -329,6 +330,7 @@ class EventAdminListSerializer(serializers.ModelSerializer):
             "listing_title",
             "owner_id",
             "owner_username",
+            "owner_email",
             "organizer",
             "organizer_name",
             "category",
