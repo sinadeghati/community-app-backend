@@ -1,4 +1,7 @@
+import base64
+
 from django.contrib.auth.models import User
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework import status
@@ -166,3 +169,90 @@ class UserEventApiTests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_create_mobile_payload_without_end_date(self):
+        self._login("ani")
+        starts = timezone.make_aware(timezone.datetime(2026, 10, 17, 19, 0))
+        response = self.client.post(
+            "/api/events/",
+            {
+                "title": "October QA Event",
+                "description": "Flyer on device only",
+                "category": "Community Gathering",
+                "starts_at": starts.isoformat(),
+                "eventDateIso": starts.isoformat(),
+                "ends_at": None,
+                "endDateIso": None,
+                "city": "San Diego",
+                "state": "CA",
+                "zip_code": "92101",
+                "country": "United States",
+                "location": "San Diego, CA",
+                "address": "123 Main St, San Diego, CA 92101",
+                "street_address": "123 Main St",
+                "latitude": 32.7157,
+                "longitude": -117.1611,
+                "organizer": "ani",
+                "ticket_url": "",
+                "business_id": None,
+                "is_public": True,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.json()["title"], "October QA Event")
+        event = Event.objects.get(pk=response.json()["id"])
+        self.assertEqual(event.owner_id, self.owner.id)
+        self.assertIsNone(event.ends_at)
+
+    def test_create_end_before_start_returns_json_400(self):
+        self._login("ani")
+        starts = self.starts
+        ends = starts - timezone.timedelta(hours=1)
+        response = self.client.post(
+            "/api/events/",
+            {
+                "title": "Bad dates",
+                "starts_at": starts.isoformat(),
+                "ends_at": ends.isoformat(),
+                "city": "San Diego",
+                "state": "CA",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("ends_at", response.json())
+
+    def test_create_with_cover_image_multipart(self):
+        self._login("ani")
+        jpeg_bytes = base64.b64decode(
+            "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRof"
+            "Hh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwh"
+            "MjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAAR"
+            "CAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAA"
+            "AAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oAD"
+            "AMBAAIRAxEAPwCwAA//2Q=="
+        )
+        image = SimpleUploadedFile(
+            "flyer.jpg", jpeg_bytes, content_type="image/jpeg"
+        )
+        response = self.client.post(
+            "/api/events/",
+            {
+                "title": "Flyer Event",
+                "starts_at": self.starts.isoformat(),
+                "city": "San Diego",
+                "state": "CA",
+                "location": "San Diego, CA",
+                "cover_image": image,
+                "is_public": "true",
+            },
+            format="multipart",
+        )
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+            response.content.decode() if response.content else "",
+        )
+        event = Event.objects.get(pk=response.json()["id"])
+        self.assertTrue(bool(event.cover_image))

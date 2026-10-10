@@ -1,5 +1,8 @@
+import logging
+
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -8,6 +11,26 @@ from listings.models import Listing
 
 from .models import Event
 from .public_views import PublicEventSerializer
+
+logger = logging.getLogger(__name__)
+
+EVENT_MODEL_WRITE_FIELDS = (
+    "title",
+    "description",
+    "category",
+    "starts_at",
+    "ends_at",
+    "location",
+    "address",
+    "city",
+    "state",
+    "zip_code",
+    "country",
+    "latitude",
+    "longitude",
+    "organizer",
+    "ticket_url",
+)
 
 
 class UserEventSerializer(PublicEventSerializer):
@@ -26,8 +49,9 @@ class UserEventWriteSerializer(serializers.ModelSerializer):
     )
     business_id = serializers.IntegerField(required=False, allow_null=True, write_only=True)
     listing_id = serializers.IntegerField(required=False, allow_null=True, write_only=True)
-    ticket_url = serializers.URLField(required=False, allow_blank=True)
+    ticket_url = serializers.URLField(required=False, allow_blank=True, allow_null=True)
     is_public = serializers.BooleanField(required=False, write_only=True, default=True)
+    cover_image = serializers.ImageField(required=False, allow_null=True, write_only=True)
 
     class Meta:
         model = Event
@@ -54,6 +78,7 @@ class UserEventWriteSerializer(serializers.ModelSerializer):
             "listing_id",
             "business_id",
             "is_public",
+            "cover_image",
         ]
         extra_kwargs = {
             "starts_at": {"required": False},
@@ -96,33 +121,55 @@ class UserEventWriteSerializer(serializers.ModelSerializer):
         listing_id = self.initial_data.get("business_id") or self.initial_data.get(
             "listing_id"
         )
-        if listing_id not in (None, ""):
+        if listing_id not in (None, "", "null"):
             attrs["listing"] = self._resolve_listing(int(listing_id))
+        ends = attrs.get("ends_at")
+        if ends is None and self.initial_data.get("ends_at") in ("", None):
+            attrs["ends_at"] = None
+        ticket = attrs.get("ticket_url")
+        if ticket is None or ticket == "":
+            attrs["ticket_url"] = ""
         return attrs
+
+    def _model_payload(self, validated_data):
+        payload = {
+            key: validated_data[key]
+            for key in EVENT_MODEL_WRITE_FIELDS
+            if key in validated_data
+        }
+        if payload.get("ends_at") is None:
+            payload["ends_at"] = None
+        return payload
 
     def create(self, validated_data):
         is_public = validated_data.pop("is_public", True)
         listing = validated_data.pop("listing", None)
-        validated_data.pop("listing_id", None)
+        cover_image = validated_data.pop("cover_image", None)
+        payload = self._model_payload(validated_data)
         request = self.context["request"]
         status_val = Event.Status.PUBLISHED if is_public else Event.Status.DRAFT
-        return Event.objects.create(
+        event = Event.objects.create(
             owner=request.user,
             status=status_val,
             listing=listing,
-            **validated_data,
+            cover_image=cover_image,
+            **payload,
         )
+        return event
 
     def update(self, instance, validated_data):
         is_public = validated_data.pop("is_public", None)
         listing = validated_data.pop("listing", serializers.empty)
+        cover_image = validated_data.pop("cover_image", serializers.empty)
         if listing is not serializers.empty:
             instance.listing = listing
+        if cover_image is not serializers.empty:
+            instance.cover_image = cover_image
         if is_public is not None:
             instance.status = (
                 Event.Status.PUBLISHED if is_public else Event.Status.DRAFT
             )
-        for attr, value in validated_data.items():
+        for attr, value in self._model_payload(validated_data).items():
             setattr(instance, attr, value)
         instance.save()
         return instance
@@ -137,6 +184,8 @@ def _user_may_edit_event(user, event: Event) -> bool:
 
 
 class PublicEventListCreateView(APIView):
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+
     def get_permissions(self):
         if self.request.method == "POST":
             return [IsAuthenticated()]
@@ -148,16 +197,23 @@ class PublicEventListCreateView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
-        serializer = UserEventWriteSerializer(
-            data=request.data, context={"request": request}
-        )
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        event = serializer.save()
-        return Response(
-            UserEventSerializer(event, context={"request": request}).data,
-            status=status.HTTP_201_CREATED,
-        )
+        try:
+            serializer = UserEventWriteSerializer(
+                data=request.data, context={"request": request}
+            )
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            event = serializer.save()
+            return Response(
+                UserEventSerializer(event, context={"request": request}).data,
+                status=status.HTTP_201_CREATED,
+            )
+        except Exception:
+            logger.exception("event_create_failed user_id=%s", request.user.pk)
+            return Response(
+                {"detail": "Could not create event. Please try again."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class UserEventMineListView(APIView):
