@@ -46,7 +46,8 @@ class PublicEventSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if obj.cover_image and request:
             return request.build_absolute_uri(obj.cover_image.url)
-        return None
+        external = (getattr(obj, "external_cover_image_url", None) or "").strip()
+        return external or None
 
     def get_cover_image(self, obj):
         return self.get_image_url(obj)

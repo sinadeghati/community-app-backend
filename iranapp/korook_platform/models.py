@@ -105,6 +105,7 @@ class Event(models.Model):
     is_sponsored = models.BooleanField(default=False)
     display_priority = models.PositiveIntegerField(default=0, db_index=True)
     cover_image = models.ImageField(upload_to="events/covers/", null=True, blank=True)
+    external_cover_image_url = models.URLField(blank=True, default="")
     cover_media_status = models.CharField(
         max_length=20,
         choices=MediaStatus.choices,

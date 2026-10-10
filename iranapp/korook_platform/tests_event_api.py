@@ -256,3 +256,96 @@ class UserEventApiTests(TestCase):
         )
         event = Event.objects.get(pk=response.json()["id"])
         self.assertTrue(bool(event.cover_image))
+
+    def test_iphone_multipart_flyer_without_external_cover_url(self):
+        """Matches physical QA: flyer upload, no external_cover_image_url."""
+        self._login("ani")
+        starts = timezone.make_aware(timezone.datetime(2026, 10, 17, 19, 0))
+        jpeg_bytes = base64.b64decode(
+            "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRof"
+            "Hh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwh"
+            "MjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAAR"
+            "CAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAA"
+            "AAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oAD"
+            "AMBAAIRAxEAPwCwAA//2Q=="
+        )
+        image = SimpleUploadedFile("flyer.jpg", jpeg_bytes, content_type="image/jpeg")
+        response = self.client.post(
+            "/api/events/",
+            {
+                "title": "October Flyer Event",
+                "description": "Device flyer",
+                "category": "Community Gathering",
+                "starts_at": starts.isoformat(),
+                "eventDateIso": starts.isoformat(),
+                "city": "San Diego",
+                "state": "CA",
+                "zip_code": "92101",
+                "country": "United States",
+                "location": "San Diego, CA",
+                "address": "123 Main St, San Diego, CA 92101",
+                "street_address": "123 Main St",
+                "organizer": "ani",
+                "ticket_url": "",
+                "is_public": "true",
+                "cover_image": image,
+            },
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        body = response.json()
+        self.assertIsInstance(body["id"], int)
+        event = Event.objects.get(pk=body["id"])
+        self.assertEqual(event.owner_id, self.owner.id)
+        self.assertEqual(event.external_cover_image_url, "")
+        self.assertTrue(bool(event.cover_image))
+
+    def test_explicit_null_external_cover_image_url(self):
+        self._login("ani")
+        response = self.client.post(
+            "/api/events/",
+            {
+                "title": "Null external url",
+                "starts_at": self.starts.isoformat(),
+                "city": "San Diego",
+                "state": "CA",
+                "external_cover_image_url": None,
+                "is_public": True,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        event = Event.objects.get(pk=response.json()["id"])
+        self.assertEqual(event.external_cover_image_url, "")
+
+    def test_create_without_flyer_or_external_image(self):
+        self._login("ani")
+        response = self.client.post(
+            "/api/events/",
+            {
+                "title": "No image event",
+                "starts_at": self.starts.isoformat(),
+                "city": "San Diego",
+                "state": "CA",
+                "is_public": True,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        event = Event.objects.get(pk=response.json()["id"])
+        self.assertEqual(event.external_cover_image_url, "")
+        self.assertFalse(bool(event.cover_image))
+
+    def test_validation_errors_return_json_not_html(self):
+        self._login("ani")
+        response = self.client.post(
+            "/api/events/",
+            {
+                "title": "",
+                "starts_at": self.starts.isoformat(),
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("application/json", response["Content-Type"])
+        self.assertNotIn("<!doctype html>", response.content.decode().lower())

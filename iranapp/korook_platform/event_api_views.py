@@ -30,7 +30,10 @@ EVENT_MODEL_WRITE_FIELDS = (
     "longitude",
     "organizer",
     "ticket_url",
+    "external_cover_image_url",
 )
+
+EVENT_OPTIONAL_BLANK_URL_FIELDS = ("ticket_url", "external_cover_image_url")
 
 
 class UserEventSerializer(PublicEventSerializer):
@@ -52,6 +55,9 @@ class UserEventWriteSerializer(serializers.ModelSerializer):
     ticket_url = serializers.URLField(required=False, allow_blank=True, allow_null=True)
     is_public = serializers.BooleanField(required=False, write_only=True, default=True)
     cover_image = serializers.ImageField(required=False, allow_null=True, write_only=True)
+    external_cover_image_url = serializers.URLField(
+        required=False, allow_blank=True, allow_null=True
+    )
 
     class Meta:
         model = Event
@@ -79,6 +85,7 @@ class UserEventWriteSerializer(serializers.ModelSerializer):
             "business_id",
             "is_public",
             "cover_image",
+            "external_cover_image_url",
         ]
         extra_kwargs = {
             "starts_at": {"required": False},
@@ -126,9 +133,10 @@ class UserEventWriteSerializer(serializers.ModelSerializer):
         ends = attrs.get("ends_at")
         if ends is None and self.initial_data.get("ends_at") in ("", None):
             attrs["ends_at"] = None
-        ticket = attrs.get("ticket_url")
-        if ticket is None or ticket == "":
-            attrs["ticket_url"] = ""
+        for url_field in EVENT_OPTIONAL_BLANK_URL_FIELDS:
+            value = attrs.get(url_field)
+            if value is None:
+                attrs[url_field] = ""
         return attrs
 
     def _model_payload(self, validated_data):
@@ -139,6 +147,9 @@ class UserEventWriteSerializer(serializers.ModelSerializer):
         }
         if payload.get("ends_at") is None:
             payload["ends_at"] = None
+        for url_field in EVENT_OPTIONAL_BLANK_URL_FIELDS:
+            if url_field not in payload or payload[url_field] is None:
+                payload[url_field] = ""
         return payload
 
     def create(self, validated_data):
