@@ -349,3 +349,82 @@ class UserEventApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("application/json", response["Content-Type"])
         self.assertNotIn("<!doctype html>", response.content.decode().lower())
+
+    def _tiny_jpeg(self, name="flyer.jpg"):
+        jpeg_bytes = base64.b64decode(
+            "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRof"
+            "Hh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwh"
+            "MjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAAR"
+            "CAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAA"
+            "AAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oAD"
+            "AMBAAIRAxEAPwCwAA//2Q=="
+        )
+        return SimpleUploadedFile(name, jpeg_bytes, content_type="image/jpeg")
+
+    def test_patch_replace_cover_image_multipart(self):
+        self._login("ani")
+        create = self.client.post(
+            "/api/events/",
+            {
+                "title": "Flyer replace",
+                "starts_at": self.starts.isoformat(),
+                "city": "San Diego",
+                "state": "CA",
+                "cover_image": self._tiny_jpeg("original.jpg"),
+                "is_public": "true",
+            },
+            format="multipart",
+        )
+        self.assertEqual(create.status_code, status.HTTP_201_CREATED)
+        event_id = create.data["id"]
+        event = Event.objects.get(pk=event_id)
+        original_name = event.cover_image.name
+        self.assertTrue(bool(original_name))
+
+        patch = self.client.patch(
+            f"/api/events/{event_id}/",
+            {
+                "title": "Flyer replace",
+                "starts_at": self.starts.isoformat(),
+                "city": "San Diego",
+                "state": "CA",
+                "cover_image": self._tiny_jpeg("replacement.jpg"),
+                "is_public": "true",
+            },
+            format="multipart",
+        )
+        self.assertEqual(patch.status_code, status.HTTP_200_OK)
+        event.refresh_from_db()
+        self.assertTrue(bool(event.cover_image))
+        self.assertNotEqual(event.cover_image.name, original_name)
+        image_url = patch.data.get("image_url") or patch.data.get("cover_image")
+        self.assertTrue(image_url)
+        self.assertIn("v=", image_url)
+
+    def test_patch_without_cover_preserves_existing_flyer(self):
+        self._login("ani")
+        create = self.client.post(
+            "/api/events/",
+            {
+                "title": "Keep flyer",
+                "starts_at": self.starts.isoformat(),
+                "city": "San Diego",
+                "state": "CA",
+                "cover_image": self._tiny_jpeg("keep.jpg"),
+                "is_public": "true",
+            },
+            format="multipart",
+        )
+        event_id = create.data["id"]
+        event = Event.objects.get(pk=event_id)
+        original_name = event.cover_image.name
+
+        patch = self.client.patch(
+            f"/api/events/{event_id}/",
+            {"title": "Renamed only"},
+            format="json",
+        )
+        self.assertEqual(patch.status_code, status.HTTP_200_OK)
+        event.refresh_from_db()
+        self.assertEqual(event.title, "Renamed only")
+        self.assertEqual(event.cover_image.name, original_name)

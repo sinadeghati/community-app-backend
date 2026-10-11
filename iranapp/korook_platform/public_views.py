@@ -42,10 +42,22 @@ class PublicEventSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+    def _absolute_media_url(self, request, relative_url, version_ts=None):
+        url = request.build_absolute_uri(relative_url)
+        if version_ts is None:
+            return url
+        joiner = "&" if "?" in url else "?"
+        return f"{url}{joiner}v={version_ts}"
+
     def get_image_url(self, obj):
         request = self.context.get("request")
         if obj.cover_image and request:
-            return request.build_absolute_uri(obj.cover_image.url)
+            version_ts = (
+                int(obj.updated_at.timestamp()) if obj.updated_at else None
+            )
+            return self._absolute_media_url(
+                request, obj.cover_image.url, version_ts=version_ts
+            )
         external = (getattr(obj, "external_cover_image_url", None) or "").strip()
         return external or None
 

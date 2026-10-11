@@ -241,6 +241,8 @@ class UserEventMineListView(APIView):
 
 
 class UserEventDetailView(APIView):
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+
     def get_permissions(self):
         if self.request.method == "GET":
             return [AllowAny()]
