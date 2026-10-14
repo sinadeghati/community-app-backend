@@ -1,4 +1,12 @@
 from django.urls import path
+from .social_views import (
+    AppleAuthView,
+    AppleLinkView,
+    GoogleAuthView,
+    GoogleLinkView,
+    ProviderDisconnectView,
+    SocialLoginMethodsView,
+)
 from .views import (
     ChangePasswordView,
     DeleteAccountView,
@@ -31,4 +39,14 @@ urlpatterns = [
     path('password/change/', ChangePasswordView.as_view(), name='password-change'),
     path('delete-account/', DeleteAccountView.as_view(), name='delete-account'),
     path('delete/', DeleteAccountView.as_view(), name='delete'),
+    path('auth/google/', GoogleAuthView.as_view(), name='auth-google'),
+    path('auth/apple/', AppleAuthView.as_view(), name='auth-apple'),
+    path('auth/google/link/', GoogleLinkView.as_view(), name='auth-google-link'),
+    path('auth/apple/link/', AppleLinkView.as_view(), name='auth-apple-link'),
+    path(
+        'auth/<str:provider>/disconnect/',
+        ProviderDisconnectView.as_view(),
+        name='auth-provider-disconnect',
+    ),
+    path('auth/methods/', SocialLoginMethodsView.as_view(), name='auth-methods'),
 ]

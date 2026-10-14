@@ -40,3 +40,36 @@ def is_user_email_verified(user):
         return user.email_profile.email_verified
     except UserEmailProfile.DoesNotExist:
         return False
+
+
+class ExternalIdentity(models.Model):
+    """OAuth provider subject linked to a Korook user (additive; backward compatible)."""
+
+    class Provider(models.TextChoices):
+        GOOGLE = "google", "Google"
+        APPLE = "apple", "Apple"
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="external_identities",
+    )
+    provider = models.CharField(max_length=16, choices=Provider.choices)
+    provider_subject = models.CharField(max_length=255)
+    provider_email = models.EmailField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "provider_subject"],
+                name="accounts_externalidentity_provider_subject_uniq",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["user", "provider"]),
+        ]
+
+    def __str__(self):
+        return f"{self.provider}:{self.provider_subject} → user {self.user_id}"

@@ -233,6 +233,10 @@ FRONTEND_EMAIL_VERIFICATION_URL = os.environ.get(
     'https://korook.com/verify-email',
 )
 
+# Social login (staging / production — comma-separated public OAuth client IDs / bundle IDs)
+SOCIAL_AUTH_GOOGLE_CLIENT_IDS = os.environ.get("SOCIAL_AUTH_GOOGLE_CLIENT_IDS", "")
+SOCIAL_AUTH_APPLE_CLIENT_IDS = os.environ.get("SOCIAL_AUTH_APPLE_CLIENT_IDS", "")
+
 # Geocoding proxy (Nominatim / OpenStreetMap)
 NOMINATIM_BASE_URL = os.environ.get(
     'NOMINATIM_BASE_URL',
