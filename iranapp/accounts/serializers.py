@@ -10,6 +10,9 @@ from django.utils.http import urlsafe_base64_decode
 from .models import get_or_create_email_profile
 from .tokens import email_verification_token_generator
 
+MAX_AVATAR_BYTES = 5 * 1024 * 1024
+ALLOWED_AVATAR_FORMATS = {"JPEG", "PNG", "WEBP"}
+
 
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
@@ -233,3 +236,38 @@ class RegisterSerializer(serializers.ModelSerializer):
         user.set_password(validated_data['password'])
         user.save()
         return user
+
+
+class AvatarImageField(serializers.ImageField):
+    """ImageField that requires a real JPEG, PNG, or WEBP no larger than 5 MB."""
+
+    default_error_messages = {
+        "invalid_image": (
+            "Upload a valid image. The file you uploaded was either not an "
+            "image or a corrupted image."
+        ),
+        "max_size": "Avatar must be 5 MB or smaller.",
+        "unsupported": (
+            "Unsupported image format. Please upload a PNG, JPEG, or WEBP file."
+        ),
+    }
+
+    def to_internal_value(self, data):
+        size = getattr(data, "size", None)
+        if size is not None and size > MAX_AVATAR_BYTES:
+            self.fail("max_size")
+
+        file_object = super().to_internal_value(data)
+
+        from PIL import Image
+
+        image = Image.open(file_object)
+        if hasattr(file_object, "seek"):
+            file_object.seek(0)
+        if (image.format or "").upper() not in ALLOWED_AVATAR_FORMATS:
+            self.fail("unsupported")
+        return file_object
+
+
+class ProfileAvatarSerializer(serializers.Serializer):
+    avatar = AvatarImageField(required=True)

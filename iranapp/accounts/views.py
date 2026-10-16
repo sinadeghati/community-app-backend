@@ -6,6 +6,7 @@ import logging
 from django.views.generic import TemplateView
 
 from rest_framework import generics, status
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -14,7 +15,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from .account_deletion import delete_user_account
 from .email_verification import send_email_verification
-from .models import get_or_create_email_profile, is_user_email_verified
+from .models import UserEmailProfile, get_or_create_email_profile, is_user_email_verified
 from .password_reset import SendGridEmailError, send_password_reset_email
 from .verification_codes import VerificationRateLimitError
 from .serializers import (
@@ -23,6 +24,7 @@ from .serializers import (
     EmailVerifySerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
+    ProfileAvatarSerializer,
     RegisterSerializer,
 )
 
@@ -307,20 +309,54 @@ class ChangePasswordView(APIView):
         )
 
 
+def _absolute_avatar_url(request, user):
+    """Absolute HTTPS URL for the stored avatar, or null when none exists."""
+    stored_name = (
+        UserEmailProfile.objects.filter(user_id=user.pk)
+        .values_list("avatar", flat=True)
+        .first()
+    )
+    if not stored_name:
+        return None
+
+    from core.media_urls import absolute_media_url
+
+    url = absolute_media_url(request, stored_name)
+    if url and url.startswith("http://"):
+        url = "https://" + url[len("http://") :]
+    return url
+
+
+def profile_payload(user, request):
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "email_verified": is_user_email_verified(user),
+        "avatar_url": _absolute_avatar_url(request, user),
+    }
+
+
 # ========== PROFILE API ==========
 class ProfileView(APIView):
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get(self, request):
-        user = request.user
-        return Response(
-            {
-                "id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "email_verified": is_user_email_verified(user),
-            }
-        )
+        return Response(profile_payload(request.user, request))
+
+    def patch(self, request):
+        uploaded = request.FILES.get("avatar")
+        if uploaded is not None:
+            serializer = ProfileAvatarSerializer(data={"avatar": uploaded})
+            serializer.is_valid(raise_exception=True)
+            profile = get_or_create_email_profile(request.user)
+            previous_name = profile.avatar.name if profile.avatar else ""
+            profile.avatar = serializer.validated_data["avatar"]
+            profile.save(update_fields=["avatar"])
+            if previous_name and previous_name != profile.avatar.name:
+                profile.avatar.storage.delete(previous_name)
+        return Response(profile_payload(request.user, request))
 
 
 # ========== DELETE ACCOUNT API ==========

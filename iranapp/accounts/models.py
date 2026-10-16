@@ -16,6 +16,11 @@ class UserEmailProfile(models.Model):
     verification_last_sent_at = models.DateTimeField(null=True, blank=True)
     verification_sends_in_window = models.PositiveSmallIntegerField(default=0)
     verification_window_started_at = models.DateTimeField(null=True, blank=True)
+    avatar = models.ImageField(
+        upload_to="profiles/avatars/",
+        null=True,
+        blank=True,
+    )
 
     class Meta:
         verbose_name = "user email profile"
