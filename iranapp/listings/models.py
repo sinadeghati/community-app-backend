@@ -108,6 +108,12 @@ class Listing(models.Model):
     verified_badge = models.BooleanField(default=False)
     verified_at = models.DateTimeField(null=True, blank=True)
     admin_note = models.TextField(blank=True, default="")
+    import_source_id = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        unique=True,
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
