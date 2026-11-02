@@ -186,3 +186,49 @@ class ListingImage(models.Model):
 
     def __str__(self) -> str:
         return f"Image for Listing {self.listing_id} ({self.role})"
+
+
+class BusinessReview(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        HIDDEN = "hidden", "Hidden"
+
+    listing = models.ForeignKey(
+        Listing,
+        on_delete=models.CASCADE,
+        related_name="reviews",
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="business_reviews",
+    )
+    rating = models.PositiveSmallIntegerField()
+    text = models.TextField()
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.APPROVED,
+        db_index=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["listing", "author"],
+                name="unique_business_review_per_author",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(rating__gte=1, rating__lte=5),
+                name="business_review_rating_between_1_and_5",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["listing", "status"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"Review {self.pk} for Listing {self.listing_id}"
