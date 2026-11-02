@@ -9,16 +9,19 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
 
+from accounts.models import UserBlock
 from korook_platform.report_serializers import (
     ContentReportCreateResponseSerializer,
     ContentReportCreateSerializer,
 )
+from .content_filter import find_review_violation
 from .models import BusinessReview, Listing
 from .review_serializers import BusinessReviewSerializer
 
 
 OWN_BUSINESS_MESSAGE = "You cannot review your own business."
 DUPLICATE_REVIEW_MESSAGE = "You have already reviewed this business."
+HELD_NOTICE = "This review is held for moderation and is not publicly visible."
 
 
 def _published_listing(listing_id):
@@ -40,6 +43,14 @@ def _approved_reviews(listing):
     )
 
 
+def _visible_approved_reviews(listing, user):
+    reviews = _approved_reviews(listing)
+    if getattr(user, "is_authenticated", False):
+        blocked_ids = UserBlock.objects.filter(blocker=user).values("blocked_id")
+        reviews = reviews.exclude(author_id__in=blocked_ids)
+    return reviews
+
+
 def _average_rating(reviews):
     count = reviews.count()
     if count == 0:
@@ -52,8 +63,8 @@ def _average_rating(reviews):
     return format(average, "f"), count
 
 
-def _review_list_payload(listing):
-    reviews = _approved_reviews(listing)
+def _review_list_payload(listing, user):
+    reviews = _visible_approved_reviews(listing, user)
     average_rating, review_count = _average_rating(reviews)
     return {
         "listing_id": listing.id,
@@ -61,6 +72,32 @@ def _review_list_payload(listing):
         "review_count": review_count,
         "reviews": BusinessReviewSerializer(reviews, many=True).data,
     }
+
+
+def _review_is_blocked_for_viewer(user, review):
+    if not getattr(user, "is_authenticated", False):
+        return False
+    if user.id == review.author_id:
+        return False
+    return UserBlock.objects.filter(blocker=user, blocked_id=review.author_id).exists()
+
+
+def _status_for_text(review, text):
+    if review is not None and review.status in (
+        BusinessReview.Status.HIDDEN,
+        BusinessReview.Status.REMOVED,
+    ):
+        return review.status
+    if find_review_violation(text):
+        return BusinessReview.Status.PENDING
+    return BusinessReview.Status.APPROVED
+
+
+def _review_payload(review):
+    payload = BusinessReviewSerializer(review).data
+    if review.status == BusinessReview.Status.PENDING:
+        payload["moderation_notice"] = HELD_NOTICE
+    return payload
 
 
 def _user_owns_listing(user, listing):
@@ -75,7 +112,7 @@ class ListingReviewListCreateView(APIView):
 
     def get(self, request, listing_id):
         listing = _published_listing(listing_id)
-        return Response(_review_list_payload(listing))
+        return Response(_review_list_payload(listing, request.user))
 
     def post(self, request, listing_id):
         listing = _published_listing(listing_id)
@@ -92,22 +129,20 @@ class ListingReviewListCreateView(APIView):
 
         serializer = BusinessReviewSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        review_status = _status_for_text(None, serializer.validated_data["text"])
         try:
             with transaction.atomic():
                 review = serializer.save(
                     listing=listing,
                     author=request.user,
-                    status=BusinessReview.Status.APPROVED,
+                    status=review_status,
                 )
         except IntegrityError:
             return Response(
                 {"detail": DUPLICATE_REVIEW_MESSAGE},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        return Response(
-            BusinessReviewSerializer(review).data,
-            status=status.HTTP_201_CREATED,
-        )
+        return Response(_review_payload(review), status=status.HTTP_201_CREATED)
 
 
 class ListingReviewDetailView(APIView):
@@ -132,12 +167,16 @@ class ListingReviewDetailView(APIView):
 
     def get(self, request, listing_id, review_id):
         _listing, review = self._review(listing_id, review_id)
+        if _review_is_blocked_for_viewer(request.user, review):
+            raise Http404
         if not self._visible_to_reader(request, review):
             raise Http404
         return Response(BusinessReviewSerializer(review).data)
 
     def patch(self, request, listing_id, review_id):
         _listing, review = self._review(listing_id, review_id)
+        if _review_is_blocked_for_viewer(request.user, review):
+            raise Http404
         if request.user.id != review.author_id:
             return Response(
                 {"detail": "You can only edit your own review."},
@@ -145,11 +184,18 @@ class ListingReviewDetailView(APIView):
             )
         serializer = BusinessReviewSerializer(review, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
+        next_text = serializer.validated_data.get("text", review.text)
+        next_status = _status_for_text(review, next_text)
         review = serializer.save()
-        return Response(BusinessReviewSerializer(review).data)
+        if review.status != next_status:
+            review.status = next_status
+            review.save(update_fields=["status", "updated_at"])
+        return Response(_review_payload(review))
 
     def delete(self, request, listing_id, review_id):
         _listing, review = self._review(listing_id, review_id)
+        if _review_is_blocked_for_viewer(request.user, review):
+            raise Http404
         if request.user.id != review.author_id:
             return Response(
                 {"detail": "You can only delete your own review."},
@@ -175,6 +221,8 @@ class ListingReviewReportView(APIView):
                 {"detail": "You cannot report your own review."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if _review_is_blocked_for_viewer(request.user, review):
+            raise Http404
 
         details = request.data.get("details", request.data.get("description", ""))
         serializer = ContentReportCreateSerializer(

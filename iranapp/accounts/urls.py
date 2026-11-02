@@ -7,6 +7,7 @@ from .social_views import (
     ProviderDisconnectView,
     SocialLoginMethodsView,
 )
+from .block_views import UserBlockListCreateView, UserUnblockView
 from .views import (
     ChangePasswordView,
     DeleteAccountView,
@@ -39,6 +40,8 @@ urlpatterns = [
     path('password/change/', ChangePasswordView.as_view(), name='password-change'),
     path('delete-account/', DeleteAccountView.as_view(), name='delete-account'),
     path('delete/', DeleteAccountView.as_view(), name='delete'),
+    path('blocks/', UserBlockListCreateView.as_view(), name='user-blocks'),
+    path('blocks/<int:user_id>/', UserUnblockView.as_view(), name='user-unblock'),
     path('auth/google/', GoogleAuthView.as_view(), name='auth-google'),
     path('auth/apple/', AppleAuthView.as_view(), name='auth-apple'),
     path('auth/google/link/', GoogleLinkView.as_view(), name='auth-google-link'),

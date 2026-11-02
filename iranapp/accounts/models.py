@@ -78,3 +78,31 @@ class ExternalIdentity(models.Model):
 
     def __str__(self):
         return f"{self.provider}:{self.provider_subject} → user {self.user_id}"
+
+
+class UserBlock(models.Model):
+    blocker = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="blocks_given",
+    )
+    blocked = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="blocks_received",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["blocker", "blocked"],
+                name="unique_user_block",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["blocker", "blocked"], name="accounts_userblock_pair_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.blocker_id} blocked {self.blocked_id}"
