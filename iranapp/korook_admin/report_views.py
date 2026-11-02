@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 
 from korook_admin.audit import log_admin_action
 from listings.models import Listing, ListingImage
+from listings.review_moderation import moderate_review
 from korook_platform.models import ContentReport, Event, UserPlatformProfile
 
 from .mixins import AdminAPIMixin
@@ -106,7 +107,22 @@ class AdminReportActionView(AdminAPIMixin, APIView):
         return Response(ContentReportAdminSerializer(report).data)
 
 
+def _review_target(report):
+    if report.reported_object_type != ContentReport.ObjectType.REVIEW:
+        return None
+    if report.business_review_id:
+        return report.business_review
+    from listings.models import BusinessReview
+
+    return BusinessReview.objects.filter(pk=report.reported_object_id).first()
+
+
 def _hide_report_target(report):
+    if report.reported_object_type == ContentReport.ObjectType.REVIEW:
+        review = _review_target(report)
+        if review is not None:
+            moderate_review(review, "hide")
+        return
     if report.listing_id:
         report.listing.status = Listing.Status.HIDDEN
         report.listing.save(update_fields=["status", "updated_at"])
@@ -119,6 +135,11 @@ def _hide_report_target(report):
 
 
 def _delete_report_target(report):
+    if report.reported_object_type == ContentReport.ObjectType.REVIEW:
+        review = _review_target(report)
+        if review is not None:
+            moderate_review(review, "remove")
+        return
     if report.listing_id:
         report.listing.delete()
     elif report.event_id:
@@ -128,6 +149,11 @@ def _delete_report_target(report):
 
 
 def _restore_report_target(report):
+    if report.reported_object_type == ContentReport.ObjectType.REVIEW:
+        review = _review_target(report)
+        if review is not None:
+            moderate_review(review, "restore")
+        return
     if report.listing_id:
         report.listing.status = Listing.Status.PUBLISHED
         report.listing.save(update_fields=["status", "updated_at"])

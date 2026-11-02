@@ -278,6 +278,7 @@ class ContentReport(models.Model):
         EVENT = "event", "Event"
         LISTING_IMAGE = "listing_image", "Listing image"
         PROMOTION = "promotion", "Promotion"
+        REVIEW = "review", "Review"
 
     class Status(models.TextChoices):
         NEW = "new", "New"
@@ -321,6 +322,13 @@ class ContentReport(models.Model):
     )
     listing_image = models.ForeignKey(
         "listings.ListingImage",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="content_reports",
+    )
+    business_review = models.ForeignKey(
+        "listings.BusinessReview",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

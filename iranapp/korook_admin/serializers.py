@@ -12,7 +12,7 @@ from korook_admin.event_admin_meta import (
     write_event_meta,
 )
 from accounts.models import UserEmailProfile
-from listings.models import Listing, ListingImage
+from listings.models import BusinessReview, Listing, ListingImage
 from korook_platform.models import (
     AdminAuditLog,
     BusinessClaim,
@@ -823,6 +823,24 @@ class BusinessClaimAdminSerializer(serializers.ModelSerializer):
         return (listing.business_name or listing.title or "").strip()
 
 
+class AdminBusinessReviewSerializer(serializers.ModelSerializer):
+    author_username = serializers.CharField(source="author.username", read_only=True)
+
+    class Meta:
+        model = BusinessReview
+        fields = [
+            "id",
+            "listing_id",
+            "author_username",
+            "rating",
+            "text",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
 class ContentReportAdminSerializer(serializers.ModelSerializer):
     class Meta:
         model = ContentReport
@@ -834,6 +852,7 @@ class ContentReportAdminSerializer(serializers.ModelSerializer):
             "listing",
             "event",
             "listing_image",
+            "business_review",
             "reason",
             "description",
             "reported_by",

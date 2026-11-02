@@ -193,6 +193,7 @@ class BusinessReview(models.Model):
         PENDING = "pending", "Pending"
         APPROVED = "approved", "Approved"
         HIDDEN = "hidden", "Hidden"
+        REMOVED = "removed", "Removed"
 
     listing = models.ForeignKey(
         Listing,

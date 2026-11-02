@@ -2,7 +2,11 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .business_claim_views import ListingBusinessClaimView
-from .review_views import ListingReviewDetailView, ListingReviewListCreateView
+from .review_views import (
+    ListingReviewDetailView,
+    ListingReviewListCreateView,
+    ListingReviewReportView,
+)
 from .views import ListingViewSet, MyListingsViewSet
 
 router = DefaultRouter()
@@ -14,6 +18,11 @@ urlpatterns = [
         "listings/<int:listing_id>/reviews/",
         ListingReviewListCreateView.as_view(),
         name="listing-reviews",
+    ),
+    path(
+        "listings/<int:listing_id>/reviews/<int:review_id>/report/",
+        ListingReviewReportView.as_view(),
+        name="listing-review-report",
     ),
     path(
         "listings/<int:listing_id>/reviews/<int:review_id>/",

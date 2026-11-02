@@ -9,6 +9,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
 
+from korook_platform.report_serializers import (
+    ContentReportCreateResponseSerializer,
+    ContentReportCreateSerializer,
+)
 from .models import BusinessReview, Listing
 from .review_serializers import BusinessReviewSerializer
 
@@ -153,3 +157,38 @@ class ListingReviewDetailView(APIView):
             )
         review.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ListingReviewReportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, listing_id, review_id):
+        listing = _published_listing(listing_id)
+        review = get_object_or_404(
+            BusinessReview,
+            pk=review_id,
+            listing=listing,
+            status=BusinessReview.Status.APPROVED,
+        )
+        if request.user.id == review.author_id:
+            return Response(
+                {"detail": "You cannot report your own review."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        details = request.data.get("details", request.data.get("description", ""))
+        serializer = ContentReportCreateSerializer(
+            data={
+                "target_type": "review",
+                "target_id": review.id,
+                "reason": request.data.get("reason", ""),
+                "description": details,
+            },
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        report = serializer.save()
+        return Response(
+            ContentReportCreateResponseSerializer(report).data,
+            status=status.HTTP_201_CREATED,
+        )

@@ -38,6 +38,7 @@ from .promotion_views import (
 )
 from .promotion_image_views import AdminPromotionHeroImageView
 from .report_views import AdminReportActionView, AdminReportDetailView, AdminReportListView
+from .review_views import AdminReviewActionView, AdminReviewDetailView, AdminReviewListView
 from .user_views import (
     AdminUserBusinessesView,
     AdminUserClaimsView,
@@ -131,6 +132,13 @@ urlpatterns = [
     path("claims/<int:claim_id>/", AdminClaimDetailView.as_view(), name="admin-claims-detail"),
     path("claims/<int:claim_id>/approve/", AdminClaimApproveView.as_view(), name="admin-claims-approve"),
     path("claims/<int:claim_id>/reject/", AdminClaimRejectView.as_view(), name="admin-claims-reject"),
+    path("reviews/", AdminReviewListView.as_view(), name="admin-reviews-list"),
+    path("reviews/<int:review_id>/", AdminReviewDetailView.as_view(), name="admin-reviews-detail"),
+    path(
+        "reviews/<int:review_id>/<str:action>/",
+        AdminReviewActionView.as_view(),
+        name="admin-reviews-action",
+    ),
     path("reports/", AdminReportListView.as_view(), name="admin-reports-list"),
     path("reports/<int:report_id>/", AdminReportDetailView.as_view(), name="admin-reports-detail"),
     path(

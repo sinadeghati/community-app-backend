@@ -1,7 +1,7 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
 
-from listings.models import Listing
+from listings.models import BusinessReview, Listing
 
 from .models import ContentReport, Event
 
@@ -25,12 +25,14 @@ TARGET_TYPE_ALIASES = {
     "business": ContentReport.ObjectType.LISTING,
     "listing": ContentReport.ObjectType.LISTING,
     "event": ContentReport.ObjectType.EVENT,
+    "review": ContentReport.ObjectType.REVIEW,
 }
 
 CANONICAL_TARGET_TYPES = {
     ContentReport.ObjectType.USER: "user",
     ContentReport.ObjectType.LISTING: "listing",
     ContentReport.ObjectType.EVENT: "event",
+    ContentReport.ObjectType.REVIEW: "review",
 }
 
 
@@ -84,7 +86,7 @@ class ContentReportCreateSerializer(serializers.Serializer):
             attrs["listing"] = target
             attrs["event"] = None
             attrs["reported_user"] = target.effective_owner
-        else:
+        elif object_type == ContentReport.ObjectType.EVENT:
             target = Event.objects.filter(pk=target_id).first()
             if target is None:
                 raise serializers.ValidationError({"target_id": "Event not found."})
@@ -93,6 +95,30 @@ class ContentReportCreateSerializer(serializers.Serializer):
             attrs["event"] = target
             attrs["listing"] = None
             attrs["reported_user"] = target.owner
+        elif object_type == ContentReport.ObjectType.REVIEW:
+            target = (
+                BusinessReview.objects.select_related("listing", "author")
+                .filter(pk=target_id)
+                .first()
+            )
+            if (
+                target is None
+                or target.status != BusinessReview.Status.APPROVED
+                or target.listing.status != Listing.Status.PUBLISHED
+            ):
+                raise serializers.ValidationError({"target_id": "Review not found."})
+            if target.author_id == reporter.pk:
+                raise serializers.ValidationError(
+                    {"target_id": "You cannot report your own review."}
+                )
+            attrs["resolved_object_type"] = object_type
+            attrs["resolved_target"] = target
+            attrs["business_review"] = target
+            attrs["listing"] = target.listing
+            attrs["event"] = None
+            attrs["reported_user"] = target.author
+        else:
+            raise serializers.ValidationError({"target_type": "Invalid target type."})
 
         open_report = ContentReport.objects.filter(
             reported_by=reporter,
@@ -119,6 +145,7 @@ class ContentReportCreateSerializer(serializers.Serializer):
             reported_user=validated_data.get("reported_user"),
             listing=validated_data.get("listing"),
             event=validated_data.get("event"),
+            business_review=validated_data.get("business_review"),
             reason=validated_data["reason"],
             description=validated_data.get("description", ""),
             reported_by=self.context["request"].user,
