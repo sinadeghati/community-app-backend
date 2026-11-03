@@ -220,6 +220,16 @@ class BusinessReviewApiTests(TestCase):
             ["other", "reviewer"],
         )
 
+        self._login("owner")
+        author_list = self.client.get(self.list_url)
+        self.assertEqual(author_list.data["review_count"], 2)
+        self.assertEqual(author_list.data["average_rating"], "4.5")
+        self.assertIn(
+            "Pending should not count.",
+            [item["text"] for item in author_list.data["reviews"]],
+        )
+        self._logout()
+
         hidden = BusinessReview.objects.get(status=BusinessReview.Status.HIDDEN)
         hidden_response = self.client.get(
             f"/api/listings/{self.listing.id}/reviews/{hidden.id}/"

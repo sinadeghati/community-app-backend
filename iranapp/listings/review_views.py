@@ -66,11 +66,21 @@ def _average_rating(reviews):
 def _review_list_payload(listing, user):
     reviews = _visible_approved_reviews(listing, user)
     average_rating, review_count = _average_rating(reviews)
+    visible = list(reviews)
+    if getattr(user, "is_authenticated", False):
+        visible_ids = {review.id for review in visible}
+        own_reviews = (
+            BusinessReview.objects.filter(listing=listing, author=user)
+            .exclude(id__in=visible_ids)
+            .select_related("author")
+            .order_by("-created_at", "-id")
+        )
+        visible.extend(own_reviews)
     return {
         "listing_id": listing.id,
         "average_rating": average_rating,
         "review_count": review_count,
-        "reviews": BusinessReviewSerializer(reviews, many=True).data,
+        "reviews": BusinessReviewSerializer(visible, many=True).data,
     }
 
 
