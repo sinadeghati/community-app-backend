@@ -825,20 +825,34 @@ class BusinessClaimAdminSerializer(serializers.ModelSerializer):
 
 class AdminBusinessReviewSerializer(serializers.ModelSerializer):
     author_username = serializers.CharField(source="author.username", read_only=True)
+    business_name = serializers.SerializerMethodField()
+    report_count = serializers.SerializerMethodField()
 
     class Meta:
         model = BusinessReview
         fields = [
             "id",
             "listing_id",
+            "business_name",
             "author_username",
             "rating",
             "text",
             "status",
+            "report_count",
             "created_at",
             "updated_at",
         ]
         read_only_fields = fields
+
+    def get_business_name(self, obj):
+        listing = obj.listing
+        return (listing.business_name or listing.title or "").strip()
+
+    def get_report_count(self, obj):
+        annotated = getattr(obj, "report_count", None)
+        if isinstance(annotated, int):
+            return annotated
+        return obj.content_reports.count()
 
 
 class ContentReportAdminSerializer(serializers.ModelSerializer):

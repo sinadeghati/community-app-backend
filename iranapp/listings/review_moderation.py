@@ -5,6 +5,7 @@ REVIEW_MODERATION_STATUSES = {
     "hide": BusinessReview.Status.HIDDEN,
     "remove": BusinessReview.Status.REMOVED,
     "restore": BusinessReview.Status.APPROVED,
+    "approve": BusinessReview.Status.APPROVED,
 }
 
 

@@ -1,3 +1,4 @@
+from django.db.models import Count
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
@@ -17,14 +18,25 @@ REPORT_ACTION_TAKEN = {
     "hide": ContentReport.ActionTaken.HIDE,
     "remove": ContentReport.ActionTaken.DELETE,
     "restore": ContentReport.ActionTaken.RESTORE,
+    "approve": ContentReport.ActionTaken.RESTORE,
 }
+
+
+def _review_queryset():
+    return (
+        BusinessReview.objects.select_related("author", "listing")
+        .annotate(report_count=Count("content_reports"))
+        .order_by("-created_at", "-id")
+    )
 
 
 class AdminReviewListView(AdminAPIMixin, APIView):
     def get(self, request):
-        reviews = BusinessReview.objects.select_related("author").order_by("-created_at", "-id")
-        status_value = request.query_params.get("status")
-        if status_value:
+        reviews = _review_queryset()
+        status_value = (request.query_params.get("status") or "").strip()
+        if status_value == "reported":
+            reviews = reviews.filter(report_count__gt=0)
+        elif status_value:
             reviews = reviews.filter(status=status_value)
         listing_id = request.query_params.get("listing_id")
         if listing_id:
@@ -38,7 +50,7 @@ class AdminReviewListView(AdminAPIMixin, APIView):
 
 class AdminReviewDetailView(AdminAPIMixin, APIView):
     def get(self, request, review_id):
-        review = BusinessReview.objects.select_related("author").filter(pk=review_id).first()
+        review = _review_queryset().filter(pk=review_id).first()
         if review is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         return Response(AdminBusinessReviewSerializer(review).data)
@@ -48,7 +60,7 @@ class AdminReviewActionView(AdminAPIMixin, APIView):
     def post(self, request, review_id, action):
         if action not in REVIEW_MODERATION_STATUSES:
             return Response({"detail": "Unknown action."}, status=status.HTTP_400_BAD_REQUEST)
-        review = BusinessReview.objects.select_related("author").filter(pk=review_id).first()
+        review = _review_queryset().filter(pk=review_id).first()
         if review is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 

@@ -15,6 +15,7 @@ import PromotionCreatePage from "./pages/promotions/PromotionCreatePage";
 import PromotionDetailPage from "./pages/promotions/PromotionDetailPage";
 import ClaimsPage from "./pages/ClaimsPage";
 import ReportsPage from "./pages/ReportsPage";
+import ReviewsModerationPage from "./pages/ReviewsModerationPage";
 import AdminErrorBoundary from "./pages/AdminErrorBoundary";
 
 const NAV = [
@@ -25,6 +26,7 @@ const NAV = [
   ["Promotions", "/promotions"],
   ["Claims", "/claims"],
   ["Reports", "/reports"],
+  ["Reviews", "/reviews"],
 ];
 
 function Shell({ children, onLogout }: { children: React.ReactNode; onLogout: () => void }) {
@@ -162,6 +164,7 @@ export default function App() {
               <Route path="/promotions" element={<PromotionsListPage />} />
               <Route path="/claims" element={<ClaimsPage />} />
               <Route path="/reports" element={<ReportsPage />} />
+              <Route path="/reviews" element={<ReviewsModerationPage />} />
             </Routes>
             </AdminErrorBoundary>
           </Shell>

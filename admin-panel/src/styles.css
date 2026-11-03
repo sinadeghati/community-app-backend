@@ -715,3 +715,10 @@ button.danger, .button-link.danger {
 .admin-error-boundary h1 {
   margin-top: 0;
 }
+.review-reports {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+.review-reports li + li {
+  margin-top: 0.35rem;
+}
