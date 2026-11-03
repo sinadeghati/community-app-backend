@@ -728,6 +728,62 @@ button.danger, .button-link.danger {
   margin: 0;
   padding-left: 1.1rem;
 }
+.queue-select { position: relative; }
+.filters-grid .queue-select-trigger,
+.filters-grid .queue-select-menu button {
+  background: #fff;
+  color: #0b1f3a;
+  border: 1px solid var(--border);
+  font-weight: 500;
+}
+.filters-grid .queue-select-trigger {
+  position: relative;
+  width: 100%;
+  text-align: left;
+  border-radius: 8px;
+  padding: 0.55rem 2rem 0.55rem 0.7rem;
+  font: inherit;
+  cursor: pointer;
+}
+.filters-grid .queue-select-trigger::after {
+  content: "";
+  position: absolute;
+  right: 0.8rem;
+  top: 50%;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-right: 2px solid #0b1f3a;
+  border-bottom: 2px solid #0b1f3a;
+  transform: translateY(-70%) rotate(45deg);
+}
+.filters-grid .queue-select-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 0.25rem 0;
+  list-style: none;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(11, 31, 58, 0.12);
+}
+.filters-grid .queue-select-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-radius: 0;
+  padding: 0.5rem 0.7rem;
+  cursor: pointer;
+}
+.filters-grid .queue-select-menu button.is-active,
+.filters-grid .queue-select-menu button[aria-selected="true"] {
+  background: #e7f8f7;
+  color: #0b1f3a;
+}
 .review-reports li + li {
   margin-top: 0.35rem;
 }

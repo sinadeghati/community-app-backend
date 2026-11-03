@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { apiFetch, type Paginated } from "../api";
 import { DataTable, StatusBanner, useAdminList } from "./adminShared";
 
@@ -36,6 +36,116 @@ const STATUS_LABELS: Record<string, string> = {
   hidden: "Hidden",
   removed: "Removed",
 };
+
+function QueueSelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const selectedIndex = Math.max(0, FILTERS.findIndex((filter) => filter.value === value));
+  const selected = FILTERS[selectedIndex];
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
+
+  const openMenu = () => {
+    setActiveIndex(selectedIndex);
+    setOpen(true);
+  };
+
+  const choose = (index: number) => {
+    const filter = FILTERS[index];
+    if (!filter) return;
+    onChange(filter.value);
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
+
+  const onMenuKeyDown = (event: KeyboardEvent<HTMLUListElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setOpen(false);
+      triggerRef.current?.focus();
+      return;
+    }
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveIndex((index) => (index + 1) % FILTERS.length);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveIndex((index) => (index - 1 + FILTERS.length) % FILTERS.length);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      setActiveIndex(0);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      setActiveIndex(FILTERS.length - 1);
+    } else if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      choose(activeIndex);
+    }
+  };
+
+  return (
+    <div className="queue-select" ref={rootRef}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="queue-select-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls="review-queue-listbox"
+        onClick={() => (open ? setOpen(false) : openMenu())}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openMenu();
+          }
+        }}
+      >
+        {selected.label}
+      </button>
+      {open ? (
+        <ul
+          id="review-queue-listbox"
+          className="queue-select-menu"
+          role="listbox"
+          aria-label="Queue"
+          tabIndex={-1}
+          autoFocus
+          onKeyDown={onMenuKeyDown}
+        >
+          {FILTERS.map((filter, index) => (
+            <li key={filter.value || "all"} role="presentation">
+              <button
+                type="button"
+                role="option"
+                aria-selected={filter.value === value}
+                className={index === activeIndex ? "is-active" : undefined}
+                onMouseEnter={() => setActiveIndex(index)}
+                onClick={() => choose(index)}
+              >
+                {filter.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
 
 function reviewEndpoint(status: string) {
   const params = new URLSearchParams({ page_size: "25" });
@@ -99,13 +209,7 @@ export default function ReviewsModerationPage() {
         <div className="filters-grid">
           <label className="form-field">
             <span>Queue</span>
-            <select value={status} onChange={(event) => setStatus(event.target.value)}>
-              {FILTERS.map((filter) => (
-                <option key={filter.value || "all"} value={filter.value}>
-                  {filter.label}
-                </option>
-              ))}
-            </select>
+            <QueueSelect value={status} onChange={setStatus} />
           </label>
         </div>
       </section>
