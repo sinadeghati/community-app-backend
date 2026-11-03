@@ -227,6 +227,15 @@ table button.danger {
   border-radius: 8px;
   font: inherit;
 }
+.form-field select {
+  background-color: #fff;
+  color: var(--navy);
+  color-scheme: light;
+}
+.form-field select option {
+  background-color: #fff;
+  color: var(--navy);
+}
 .checkbox-field {
   display: flex;
   align-items: center;
